@@ -16,15 +16,22 @@ const capabilitiesByRole: Record<Role, Capability[]> = {
     "SALES_ORDERS_VIEW",
     "SKUS_VIEW",
     "SKUS_MANAGE",
+    "CUSTOMERS_VIEW",
+    "CUSTOMERS_MANAGE",
     "INVENTORY_VIEW",
     "OUTBOUND_VIEW",
     "RECEIVABLES_VIEW",
     "ACCOUNTS_MANAGE",
     "AUDIT_VIEW",
   ],
-  SALES: ["SALES_ORDERS_VIEW", "SKUS_VIEW"],
+  SALES: [
+    "SALES_ORDERS_VIEW",
+    "SKUS_VIEW",
+    "CUSTOMERS_VIEW",
+    "CUSTOMERS_MANAGE",
+  ],
   WAREHOUSE: ["OUTBOUND_VIEW", "INVENTORY_VIEW"],
-  FINANCE: ["RECEIVABLES_VIEW"],
+  FINANCE: ["RECEIVABLES_VIEW", "CUSTOMERS_VIEW"],
 };
 
 function actorWith(...actorRoles: Role[]): Actor {
@@ -68,6 +75,7 @@ describe("角色权限", () => {
     expect(getActorNavigation(actor).map(({ href }) => href)).toEqual([
       "/sales-orders",
       "/skus",
+      "/customers",
       "/warehouse/outbound",
     ]);
   });

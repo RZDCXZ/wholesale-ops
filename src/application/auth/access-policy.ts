@@ -5,6 +5,8 @@ export type Capability =
   | "SALES_ORDERS_VIEW"
   | "SKUS_VIEW"
   | "SKUS_MANAGE"
+  | "CUSTOMERS_VIEW"
+  | "CUSTOMERS_MANAGE"
   | "INVENTORY_VIEW"
   | "OUTBOUND_VIEW"
   | "RECEIVABLES_VIEW"
@@ -38,6 +40,12 @@ const navigation: NavigationItem[] = [
     href: "/skus",
   },
   {
+    capability: "CUSTOMERS_VIEW",
+    group: "销售",
+    label: "客户",
+    href: "/customers",
+  },
+  {
     capability: "OUTBOUND_VIEW",
     group: "仓库",
     label: "待出库",
@@ -67,11 +75,18 @@ const capabilitiesByRole: Record<Role, ReadonlySet<Capability>> = {
   OWNER: new Set([
     ...navigation.map(({ capability }) => capability),
     "SKUS_MANAGE",
+    "CUSTOMERS_VIEW",
+    "CUSTOMERS_MANAGE",
     "INVENTORY_VIEW",
   ]),
-  SALES: new Set(["SALES_ORDERS_VIEW", "SKUS_VIEW"]),
+  SALES: new Set([
+    "SALES_ORDERS_VIEW",
+    "SKUS_VIEW",
+    "CUSTOMERS_VIEW",
+    "CUSTOMERS_MANAGE",
+  ]),
   WAREHOUSE: new Set(["OUTBOUND_VIEW", "INVENTORY_VIEW"]),
-  FINANCE: new Set(["RECEIVABLES_VIEW"]),
+  FINANCE: new Set(["RECEIVABLES_VIEW", "CUSTOMERS_VIEW"]),
 };
 
 export type CapabilityAuthorizationResult =
@@ -99,5 +114,15 @@ export function getActorNavigation(actor: Pick<Actor, "roles">): NavigationItem[
 }
 
 export function getActorHomePath(actor: Pick<Actor, "roles">): string {
-  return getActorNavigation(actor)[0]?.href ?? "/forbidden";
+  const preferredHome = [
+    ["OVERVIEW_VIEW", "/overview"],
+    ["SALES_ORDERS_VIEW", "/sales-orders"],
+    ["OUTBOUND_VIEW", "/warehouse/outbound"],
+    ["RECEIVABLES_VIEW", "/receivables"],
+  ] as const;
+  return (
+    preferredHome.find(([capability]) =>
+      hasCapability(actor, capability),
+    )?.[1] ?? "/forbidden"
+  );
 }

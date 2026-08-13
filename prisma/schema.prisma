@@ -27,6 +27,7 @@ model User {
   accounts       Account[]
   roles          UserRole[]
   businessAudits BusinessAudit[]
+  responsibleCustomers Customer[] @relation("CustomerResponsibleSales")
 
   @@map("user")
 }
@@ -121,4 +122,24 @@ model Sku {
   @@index([category])
   @@index([enabled])
   @@map("sku")
+}
+
+model Customer {
+  id                 String   @id
+  customerCode       String   @unique
+  name               String
+  contactName        String
+  phone               String
+  address             String
+  responsibleSalesId String
+  paymentTermDays    Int
+  enabled             Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+  responsibleSales   User     @relation("CustomerResponsibleSales", fields: [responsibleSalesId], references: [id], onDelete: Restrict)
+
+  @@index([name])
+  @@index([responsibleSalesId])
+  @@index([enabled])
+  @@map("customer")
 }

@@ -23,10 +23,16 @@ const actionOptions = [
   { value: "SKU_UPDATED", label: "编辑 SKU" },
   { value: "SKU_DISABLED", label: "停用 SKU" },
   { value: "SKU_DELETED", label: "删除 SKU" },
+  { value: "CUSTOMER_CREATED", label: "创建客户" },
+  { value: "CUSTOMER_UPDATED", label: "编辑客户" },
+  { value: "CUSTOMER_RESPONSIBLE_SALES_CHANGED", label: "调整客户负责人" },
+  { value: "CUSTOMER_DISABLED", label: "停用客户" },
+  { value: "CUSTOMER_DELETED", label: "删除客户" },
 ] as const;
 const objectOptions = [
   { value: "ACCOUNT", label: "账号" },
   { value: "SKU", label: "SKU" },
+  { value: "CUSTOMER", label: "客户" },
 ] as const;
 const actionLabels = Object.fromEntries(
   actionOptions.map(({ value, label }) => [value, label]),
@@ -465,6 +471,8 @@ export default async function AuditPage({
                 ? `/settings/accounts/${detailAudit.objectId}`
                 : detailAudit.objectType === "SKU" && detailAudit.action !== "SKU_DELETED"
                   ? `/skus/${detailAudit.objectId}`
+                  : detailAudit.objectType === "CUSTOMER" && detailAudit.action !== "CUSTOMER_DELETED"
+                    ? `/customers/${detailAudit.objectId}`
                 : undefined,
           }}
         />

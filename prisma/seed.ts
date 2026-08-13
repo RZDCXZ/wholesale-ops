@@ -135,7 +135,51 @@ try {
     });
   }
 
-  console.log(`已写入 ${demoAccounts.length} 个虚构演示账号和 ${demoSkus.length} 个虚构 SKU。`);
+  const [salesUser, multiUser] = await Promise.all([
+    prisma.user.findUniqueOrThrow({ where: { email: "sales@example.local" } }),
+    prisma.user.findUniqueOrThrow({ where: { email: "multi@example.local" } }),
+  ]);
+  const demoCustomers = [
+    {
+      id: "demo-customer-kh-0003",
+      customerCode: "KH-0003",
+      name: "广顺五金商行",
+      contactName: "李海峰",
+      phone: "138 0000 0000",
+      address: "广东省深圳市宝安区工业路 18 号",
+      responsibleSalesId: salesUser.id,
+      paymentTermDays: 30,
+      enabled: true,
+    },
+    {
+      id: "demo-customer-kh-0004",
+      customerCode: "KH-0004",
+      name: "华南机电工程部",
+      contactName: "周志成",
+      phone: "136 0000 0000",
+      address: "广东省深圳市龙华区民治大道 27 号",
+      responsibleSalesId: multiUser.id,
+      paymentTermDays: 0,
+      enabled: true,
+    },
+  ] as const;
+  for (const customer of demoCustomers) {
+    await prisma.customer.upsert({
+      where: { customerCode: customer.customerCode },
+      create: customer,
+      update: {
+        name: customer.name,
+        contactName: customer.contactName,
+        phone: customer.phone,
+        address: customer.address,
+        responsibleSalesId: customer.responsibleSalesId,
+        paymentTermDays: customer.paymentTermDays,
+        enabled: customer.enabled,
+      },
+    });
+  }
+
+  console.log(`已写入 ${demoAccounts.length} 个虚构演示账号、${demoSkus.length} 个虚构 SKU 和 ${demoCustomers.length} 个虚构客户。`);
 } finally {
   await prisma.$disconnect();
 }

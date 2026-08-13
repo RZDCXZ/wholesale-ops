@@ -12,6 +12,7 @@ import {
   IconReceipt2,
   IconShieldCheck,
   IconUser,
+  IconUsers,
   IconX,
 } from "@tabler/icons-react";
 import Link from "next/link";
@@ -29,6 +30,7 @@ const navigationIcons = {
   "/overview": IconChartBar,
   "/sales-orders": IconFileInvoice,
   "/skus": IconBox,
+  "/customers": IconUsers,
   "/warehouse/outbound": IconPackageExport,
   "/receivables": IconReceipt2,
   "/audit": IconShieldCheck,
