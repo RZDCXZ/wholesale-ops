@@ -23,6 +23,7 @@ const actionOptions = [
   { value: "SKU_UPDATED", label: "编辑 SKU" },
   { value: "SKU_DISABLED", label: "停用 SKU" },
   { value: "SKU_DELETED", label: "删除 SKU" },
+  { value: "SKU_IMPORTED", label: "导入 SKU" },
   { value: "CUSTOMER_CREATED", label: "创建客户" },
   { value: "CUSTOMER_UPDATED", label: "编辑客户" },
   { value: "CUSTOMER_RESPONSIBLE_SALES_CHANGED", label: "调整客户负责人" },
@@ -33,6 +34,7 @@ const objectOptions = [
   { value: "ACCOUNT", label: "账号" },
   { value: "SKU", label: "SKU" },
   { value: "CUSTOMER", label: "客户" },
+  { value: "DATA_IMPORT", label: "导入记录" },
 ] as const;
 const actionLabels = Object.fromEntries(
   actionOptions.map(({ value, label }) => [value, label]),

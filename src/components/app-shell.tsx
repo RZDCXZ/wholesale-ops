@@ -11,6 +11,7 @@ import {
   IconPackageExport,
   IconReceipt2,
   IconShieldCheck,
+  IconUpload,
   IconUser,
   IconUsers,
   IconX,
@@ -33,6 +34,7 @@ const navigationIcons = {
   "/customers": IconUsers,
   "/warehouse/outbound": IconPackageExport,
   "/receivables": IconReceipt2,
+  "/imports": IconUpload,
   "/audit": IconShieldCheck,
   "/settings/accounts": IconUser,
 };

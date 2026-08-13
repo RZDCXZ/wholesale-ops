@@ -27,6 +27,7 @@ model User {
   accounts       Account[]
   roles          UserRole[]
   businessAudits BusinessAudit[]
+  dataImports    DataImport[]
   responsibleCustomers Customer[] @relation("CustomerResponsibleSales")
 
   @@map("user")
@@ -104,6 +105,20 @@ model BusinessAudit {
   @@index([actorId])
   @@index([occurredAt])
   @@map("business_audit")
+}
+
+model DataImport {
+  id          String   @id
+  importType  String
+  fileName    String
+  rowCount    Int
+  actorId     String
+  confirmedAt DateTime @default(now())
+  actor       User     @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([actorId])
+  @@index([confirmedAt])
+  @@map("data_import")
 }
 
 model Sku {

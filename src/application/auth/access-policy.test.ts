@@ -21,6 +21,7 @@ const capabilitiesByRole: Record<Role, Capability[]> = {
     "INVENTORY_VIEW",
     "OUTBOUND_VIEW",
     "RECEIVABLES_VIEW",
+    "IMPORTS_MANAGE",
     "ACCOUNTS_MANAGE",
     "AUDIT_VIEW",
   ],

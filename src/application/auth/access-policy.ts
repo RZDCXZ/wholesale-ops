@@ -10,6 +10,7 @@ export type Capability =
   | "INVENTORY_VIEW"
   | "OUTBOUND_VIEW"
   | "RECEIVABLES_VIEW"
+  | "IMPORTS_MANAGE"
   | "AUDIT_VIEW"
   | "ACCOUNTS_MANAGE";
 
@@ -56,6 +57,12 @@ const navigation: NavigationItem[] = [
     group: "财务",
     label: "应收",
     href: "/receivables",
+  },
+  {
+    capability: "IMPORTS_MANAGE",
+    group: "数据",
+    label: "导入",
+    href: "/imports",
   },
   {
     capability: "AUDIT_VIEW",
