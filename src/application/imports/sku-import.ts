@@ -1,4 +1,4 @@
-import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
+import { randomUUID } from "node:crypto";
 
 import { z } from "zod";
 import * as XLSX from "xlsx";
@@ -11,6 +11,11 @@ import {
   type ImportFile,
   type ImportFileRejection,
 } from "./workbook-import";
+import {
+  issueImportPreviewToken,
+  readImportPreviewToken,
+  type ImportTokenContext,
+} from "./signed-import-preview";
 
 const SKU_IMPORT_HEADERS = [
   "SKU 编码",
@@ -72,11 +77,6 @@ export type SkuImportPreview =
       validRows: SkuImportRow[];
       errors: ImportRowError[];
     };
-
-export type ImportTokenContext = {
-  secret: string;
-  now: Date;
-};
 
 export type IssuedSkuImportPreview =
   | Exclude<SkuImportPreview, { status: "ready" }>
@@ -183,62 +183,29 @@ function referencePriceFen(value: unknown): number {
   return Number(yuan) * 100 + Number(fraction.padEnd(2, "0"));
 }
 
-function previewSignature(payload: string, secret: string): string {
-  return createHmac("sha256", secret).update(payload).digest("base64url");
-}
-
 function issuePreviewToken(
   actor: Actor,
   fileName: string,
   rows: SkuImportRow[],
   context: ImportTokenContext,
 ): { previewToken: string; expiresAt: Date } {
-  const expiresAt = new Date(context.now.getTime() + 15 * 60_000);
-  const payload = Buffer.from(
-    JSON.stringify({
+  return issueImportPreviewToken<PreviewPayload>(
+    {
       version: 1,
-      previewId: randomUUID(),
       actorId: actor.id,
       importType: "SKU",
       fileName,
-      expiresAt: expiresAt.getTime(),
       rows,
-    } satisfies PreviewPayload),
-  ).toString("base64url");
-  return {
-    previewToken: `${payload}.${previewSignature(payload, context.secret)}`,
-    expiresAt,
-  };
+    },
+    context,
+  );
 }
 
 function readPreviewToken(
   token: string,
   context: ImportTokenContext,
 ): PreviewPayload | null {
-  const parts = token.split(".");
-  if (parts.length !== 2) return null;
-  const [payload, receivedSignature] = parts;
-  if (!payload || !receivedSignature) return null;
-  const expected = Buffer.from(previewSignature(payload, context.secret));
-  const received = Buffer.from(receivedSignature);
-  if (
-    expected.length !== received.length ||
-    !timingSafeEqual(expected, received)
-  ) {
-    return null;
-  }
-
-  try {
-    const parsed = previewPayloadSchema.safeParse(
-      JSON.parse(Buffer.from(payload, "base64url").toString("utf8")),
-    );
-    if (!parsed.success || parsed.data.expiresAt <= context.now.getTime()) {
-      return null;
-    }
-    return parsed.data;
-  } catch {
-    return null;
-  }
+  return readImportPreviewToken(token, previewPayloadSchema, context);
 }
 
 function parseSkuImportFile(

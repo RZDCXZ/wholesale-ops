@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { SkuImportWorkbench } from "@/components/sku-import-workbench";
+import { ImportWorkbench } from "@/components/import-workbench";
 import { getPageActor } from "@/lib/server-authorization";
 
 export const metadata: Metadata = { title: "导入工作台" };
@@ -18,7 +18,7 @@ export default async function ImportsPage() {
           SKU、客户与期初库存使用固定 .xlsx 模板
         </p>
       </header>
-      <SkuImportWorkbench />
+      <ImportWorkbench />
     </>
   );
 }
