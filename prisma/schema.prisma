@@ -28,6 +28,12 @@ enum SalesOrderStatus {
   CANCELLED
 }
 
+enum ReceivableStatus {
+  PENDING
+  PARTIAL
+  SETTLED
+}
+
 model User {
   id                   String              @id
   name                 String
@@ -44,7 +50,7 @@ model User {
   dataImports          DataImport[]
   inventoryMovements   InventoryMovement[]
   responsibleCustomers Customer[]          @relation("CustomerResponsibleSales")
-  createdSalesOrders   SalesOrder[]         @relation("SalesOrderCreator")
+  createdSalesOrders   SalesOrder[]        @relation("SalesOrderCreator")
 
   @@map("user")
 }
@@ -198,19 +204,20 @@ model InventoryMovement {
 }
 
 model Customer {
-  id                 String   @id
-  customerCode       String   @unique
+  id                 String       @id
+  customerCode       String       @unique
   name               String
   contactName        String
   phone              String
   address            String
   responsibleSalesId String
   paymentTermDays    Int
-  enabled            Boolean  @default(true)
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  responsibleSales   User     @relation("CustomerResponsibleSales", fields: [responsibleSalesId], references: [id], onDelete: Restrict)
-  salesOrders         SalesOrder[]
+  enabled            Boolean      @default(true)
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  responsibleSales   User         @relation("CustomerResponsibleSales", fields: [responsibleSalesId], references: [id], onDelete: Restrict)
+  salesOrders        SalesOrder[]
+  receivables        Receivable[]
 
   @@index([name])
   @@index([responsibleSalesId])
@@ -219,25 +226,26 @@ model Customer {
 }
 
 model SalesOrder {
-  id                              String           @id
-  salesOrderNumber                String           @unique
-  status                          SalesOrderStatus @default(DRAFT)
-  customerId                      String
-  creatorId                       String
-  customerCodeSnapshot            String
-  customerNameSnapshot            String
-  customerContactNameSnapshot     String
-  customerPhoneSnapshot           String
-  customerAddressSnapshot         String
-  responsibleSalesIdSnapshot      String
-  responsibleSalesNameSnapshot    String
-  paymentTermDaysSnapshot         Int
-  totalAmountFen                  Int
-  createdAt                       DateTime         @default(now())
-  updatedAt                       DateTime         @updatedAt
-  customer                        Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
-  creator                         User             @relation("SalesOrderCreator", fields: [creatorId], references: [id], onDelete: Restrict)
-  items                           SalesOrderItem[]
+  id                           String           @id
+  salesOrderNumber             String           @unique
+  status                       SalesOrderStatus @default(DRAFT)
+  customerId                   String
+  creatorId                    String
+  customerCodeSnapshot         String
+  customerNameSnapshot         String
+  customerContactNameSnapshot  String
+  customerPhoneSnapshot        String
+  customerAddressSnapshot      String
+  responsibleSalesIdSnapshot   String
+  responsibleSalesNameSnapshot String
+  paymentTermDaysSnapshot      Int
+  totalAmountFen               Int
+  createdAt                    DateTime         @default(now())
+  updatedAt                    DateTime         @updatedAt
+  customer                     Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  creator                      User             @relation("SalesOrderCreator", fields: [creatorId], references: [id], onDelete: Restrict)
+  items                        SalesOrderItem[]
+  receivable                   Receivable?
 
   @@index([customerId])
   @@index([creatorId])
@@ -245,6 +253,33 @@ model SalesOrder {
   @@index([status, updatedAt])
   @@index([createdAt])
   @@map("sales_order")
+}
+
+model Receivable {
+  id                         String           @id
+  receivableNumber           String           @unique
+  salesOrderId               String           @unique
+  customerId                 String
+  customerCodeSnapshot       String
+  customerNameSnapshot       String
+  responsibleSalesIdSnapshot String
+  originalAmountFen          Int
+  receivedAmountFen          Int              @default(0)
+  remainingAmountFen         Int
+  paymentTermDaysSnapshot    Int
+  outboundAt                 DateTime
+  dueDate                    DateTime         @db.Date
+  status                     ReceivableStatus @default(PENDING)
+  createdAt                  DateTime         @default(now())
+  updatedAt                  DateTime         @updatedAt
+  salesOrder                 SalesOrder       @relation(fields: [salesOrderId], references: [id], onDelete: Restrict)
+  customer                   Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
+
+  @@index([customerId])
+  @@index([responsibleSalesIdSnapshot])
+  @@index([status, dueDate])
+  @@index([outboundAt])
+  @@map("receivable")
 }
 
 model SalesOrderItem {

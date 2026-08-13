@@ -222,7 +222,7 @@ export function SalesOrderInventoryImpacts({
     availableAfter: number;
   };
   showDeltas?: boolean;
-  direction?: "reserve" | "release";
+  direction?: "reserve" | "release" | "outbound";
 }) {
   const { state } = useConfirmation();
   const latest = state.inventoryShortages?.find(
@@ -238,7 +238,9 @@ export function SalesOrderInventoryImpacts({
   const availableAfter = latest
     ? latest.availableQuantity - quantity
     : initialImpact.availableAfter;
-  const reservedDelta = direction === "release" ? -quantity : quantity;
+  const onHandDelta = direction === "outbound" ? -quantity : 0;
+  const reservedDelta = direction === "reserve" ? quantity : -quantity;
+  const availableDelta = direction === "outbound" ? 0 : -reservedDelta;
 
   return (
     <>
@@ -246,7 +248,11 @@ export function SalesOrderInventoryImpacts({
         <span className="block text-xs text-[#667085]">现存量</span>
         <strong className="mt-1 block tabular-nums">
           {onHandBefore} → {onHandAfter}{" "}
-          {showDeltas ? <small className="text-[#667085]">不变</small> : null}
+          {showDeltas ? (
+            <small className="text-[#667085]">
+              {onHandDelta === 0 ? "不变" : formatSignedQuantity(onHandDelta)}
+            </small>
+          ) : null}
         </strong>
       </div>
       <div className="rounded-md bg-[#f7f9fb] px-3 py-2">
@@ -271,7 +277,11 @@ export function SalesOrderInventoryImpacts({
         <strong className="mt-1 block tabular-nums">
           {availableBefore} → {availableAfter}{" "}
           {showDeltas ? (
-            <small>{formatSignedQuantity(-reservedDelta)}</small>
+            <small>
+              {availableDelta === 0
+                ? "不变"
+                : formatSignedQuantity(availableDelta)}
+            </small>
           ) : null}
         </strong>
       </div>

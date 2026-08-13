@@ -13,6 +13,7 @@ import {
   getSalesOrderDetail,
   SalesOrderServiceError,
 } from "@/application/sales-orders/sales-order-service";
+import { OutboundConfirmTrigger } from "@/components/outbound-confirm-dialog";
 import { SalesOrderCancelTrigger } from "@/components/sales-order-cancel-dialog";
 import {
   SalesOrderConfirmationFeedback,
@@ -93,6 +94,7 @@ export default async function SalesOrderDetailPage({
   const notice = first(parameters.notice);
   const confirmedNotice = notice === "confirmed" && salesOrder.status === "CONFIRMED";
   const cancelledNotice = notice === "cancelled" && salesOrder.status === "CANCELLED";
+  const outboundNotice = notice === "outbound" && salesOrder.status === "OUTBOUND";
   const status = statusConfig[salesOrder.status];
   const canViewInventory =
     authorizeCapability(actor, "INVENTORY_VIEW").kind === "authorized";
@@ -126,6 +128,31 @@ export default async function SalesOrderDetailPage({
       quantity: item.quantity,
     })),
   };
+  const outboundTask =
+    salesOrder.status === "CONFIRMED" && salesOrder.confirmation
+      ? {
+          id: salesOrder.id,
+          salesOrderNumber: salesOrder.salesOrderNumber,
+          customer: {
+            name: salesOrder.customerSnapshot.name,
+            contactName: salesOrder.customerSnapshot.contactName,
+            phone: salesOrder.customerSnapshot.phone,
+            address: salesOrder.customerSnapshot.address,
+          },
+          confirmedAt: salesOrder.confirmation.occurredAt,
+          confirmedByName: salesOrder.confirmation.actorName,
+          items: salesOrder.items.map((item) => ({
+            skuId: item.skuId,
+            skuCode: item.skuCode,
+            skuName: item.skuName,
+            inventoryUnit: item.inventoryUnit,
+            quantity: item.quantity,
+            reservationComplete:
+              item.confirmationImpact !== null &&
+              item.currentInventory.reservedQuantity >= item.quantity,
+          })),
+        }
+      : null;
 
   return (
     <SalesOrderConfirmationProvider salesOrder={confirmable}>
@@ -146,6 +173,16 @@ export default async function SalesOrderDetailPage({
           </p>
         </div>
         <div className="flex flex-wrap gap-2.5">
+          {outboundTask &&
+          authorizeCapability(actor, "OUTBOUND_VIEW").kind === "authorized" ? (
+            <OutboundConfirmTrigger
+              task={outboundTask}
+              label="完成整单出库"
+              returnTo="sales-order"
+              variant="primary"
+              className="px-4"
+            />
+          ) : null}
           {salesOrder.canCancel ? (
             <SalesOrderCancelTrigger
               salesOrder={cancelable}
@@ -195,6 +232,16 @@ export default async function SalesOrderDetailPage({
         </div>
       ) : null}
 
+      {outboundNotice && salesOrder.outbound ? (
+        <div role="status" className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-[#a8c7fa] bg-[#eff6ff] px-4 py-3 text-[13px] font-semibold text-[#175cd3]">
+          <IconCircleCheck aria-hidden size={19} />
+          <span>销售单已完成整单出库，现存量与预占量已同步减少，并已生成一笔经营应收。</span>
+          {canViewAudit ? (
+            <Link href={`/audit?detail=${encodeURIComponent(salesOrder.outbound.auditId)}`} className="ml-auto underline underline-offset-2">查看业务审计</Link>
+          ) : null}
+        </div>
+      ) : null}
+
       <section className="grid overflow-hidden rounded-lg border border-[#e4e7ec] bg-white sm:grid-cols-2 lg:grid-cols-5 divide-x divide-[#e4e7ec] max-sm:divide-x-0 max-sm:divide-y">
         {[
           ["客户编码", salesOrder.customerSnapshot.customerCode],
@@ -231,12 +278,12 @@ export default async function SalesOrderDetailPage({
 
           <section className="overflow-hidden rounded-lg border border-[#e4e7ec] bg-white">
             <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e4e7ec] px-4 py-3.5">
-              <div><h2 className="text-base font-bold">库存影响{salesOrder.status === "DRAFT" ? "（确认前预估）" : salesOrder.status === "CANCELLED" ? "（释放预占）" : "（建立预占）"}</h2><p className="mt-1 text-xs text-[#667085]">可用量 = 现存量 - 预占量；当前库存数字来自服务端。</p></div>
+              <div><h2 className="text-base font-bold">库存影响{salesOrder.status === "DRAFT" ? "（确认前预估）" : salesOrder.status === "CANCELLED" ? "（释放预占）" : salesOrder.status === "OUTBOUND" ? "（完成出库）" : "（建立预占）"}</h2><p className="mt-1 text-xs text-[#667085]">可用量 = 现存量 - 预占量；当前库存数字来自服务端。</p></div>
               {canViewInventory ? <Link href={`/inventory/ledger?reference=${encodeURIComponent(salesOrder.salesOrderNumber)}`} className="inline-flex min-h-11 items-center rounded-[7px] border border-[#d0d5dd] px-3 text-sm font-semibold text-[#344054]">查看相关库存流水</Link> : null}
             </header>
             <div className="grid gap-3 p-4">
               {salesOrder.items.map((item) => {
-                const impact = (salesOrder.status === "CANCELLED" ? item.cancellationImpact : item.confirmationImpact) ?? {
+                const impact = (salesOrder.status === "CANCELLED" ? item.cancellationImpact : salesOrder.status === "OUTBOUND" ? item.outboundImpact : item.confirmationImpact) ?? {
                   onHandBefore: item.currentInventory.onHandQuantity,
                   onHandAfter: item.currentInventory.onHandQuantity,
                   reservedBefore: item.currentInventory.reservedQuantity,
@@ -245,12 +292,12 @@ export default async function SalesOrderDetailPage({
                   availableAfter: item.currentInventory.availableQuantity - item.quantity,
                 };
                 const shortage = Math.max(0, item.quantity - item.currentInventory.availableQuantity);
-                return <SalesOrderInventoryRow key={item.id} skuId={item.skuId} initiallyShort={shortage > 0 && salesOrder.status === "DRAFT"}><div><strong className="font-mono text-xs text-[#1d4ed8]">{item.skuCode}</strong><span className="mt-1 block font-semibold">{item.skuName}</span>{salesOrder.status === "DRAFT" ? <SalesOrderItemShortage skuId={item.skuId} requiredQuantity={item.quantity} initialAvailableQuantity={item.currentInventory.availableQuantity} inventoryUnit={item.inventoryUnit} /> : null}</div><SalesOrderInventoryImpacts skuId={item.skuId} quantity={item.quantity} initialImpact={impact} showDeltas direction={salesOrder.status === "CANCELLED" ? "release" : "reserve"} /></SalesOrderInventoryRow>;
+                return <SalesOrderInventoryRow key={item.id} skuId={item.skuId} initiallyShort={shortage > 0 && salesOrder.status === "DRAFT"}><div><strong className="font-mono text-xs text-[#1d4ed8]">{item.skuCode}</strong><span className="mt-1 block font-semibold">{item.skuName}</span>{salesOrder.status === "DRAFT" ? <SalesOrderItemShortage skuId={item.skuId} requiredQuantity={item.quantity} initialAvailableQuantity={item.currentInventory.availableQuantity} inventoryUnit={item.inventoryUnit} /> : null}</div><SalesOrderInventoryImpacts skuId={item.skuId} quantity={item.quantity} initialImpact={impact} showDeltas direction={salesOrder.status === "CANCELLED" ? "release" : salesOrder.status === "OUTBOUND" ? "outbound" : "reserve"} /></SalesOrderInventoryRow>;
               })}
             </div>
           </section>
 
-          {salesOrder.status !== "DRAFT" ? <p className="flex items-center gap-2 rounded-lg bg-[#f7f9fb] px-4 py-3 text-[13px] text-[#667085]"><IconLock aria-hidden size={16} />{salesOrder.status === "CANCELLED" ? "销售单已取消并永久保留，不能重新启用、编辑、删除或再次取消。" : "已确认内容被冻结，仅支持通过后续业务动作继续流转。"}</p> : null}
+          {salesOrder.status !== "DRAFT" ? <p className="flex items-center gap-2 rounded-lg bg-[#f7f9fb] px-4 py-3 text-[13px] text-[#667085]"><IconLock aria-hidden size={16} />{salesOrder.status === "CANCELLED" ? "销售单已取消并永久保留，不能重新启用、编辑、删除或再次取消。" : salesOrder.status === "OUTBOUND" ? "销售单已完整交付并永久冻结，不能编辑、删除、取消或重复出库。" : "已确认内容被冻结，仅支持通过后续业务动作继续流转。"}</p> : null}
         </main>
 
         <aside className="grid content-start gap-5">
@@ -260,6 +307,7 @@ export default async function SalesOrderDetailPage({
               <div className="relative grid grid-cols-[24px_1fr] gap-3 pb-5 before:absolute before:top-6 before:bottom-0 before:left-[11px] before:w-px before:bg-[#a7d9b6]"><span className="grid size-6 place-items-center rounded-full bg-[#027a48] text-white"><IconCheck aria-hidden size={14} /></span><div><strong>创建销售单</strong><span className="mt-1 block text-xs text-[#667085]">{formatDate(salesOrder.createdAt)}</span></div></div>
               {salesOrder.confirmation ? <div className="relative grid grid-cols-[24px_1fr] gap-3 pb-5 before:absolute before:top-6 before:bottom-0 before:left-[11px] before:w-px before:bg-[#a7d9b6]"><span className="grid size-6 place-items-center rounded-full bg-[#027a48] text-white"><IconCheck aria-hidden size={14} /></span><div><strong>确认并预占库存</strong><span className="mt-1 block text-xs text-[#667085]">{formatDate(salesOrder.confirmation.occurredAt)} · {salesOrder.confirmation.actorName}</span>{canViewAudit ? <Link href={`/audit?detail=${encodeURIComponent(salesOrder.confirmation.auditId)}`} className="mt-2 inline-block font-semibold text-[#1d4ed8]">查看业务审计</Link> : null}</div></div> : <div className="grid grid-cols-[24px_1fr] gap-3"><span className="mt-1 size-3 justify-self-center rounded-full border-2 border-[#98a2b3] bg-white" /><div><strong>等待确认</strong><span className="mt-1 block text-xs text-[#667085]">确认后建立全部 SKU 预占</span></div></div>}
               {salesOrder.cancellation ? <div className="grid grid-cols-[24px_1fr] gap-3"><span className="grid size-6 place-items-center rounded-full bg-[#c62828] text-white"><IconX aria-hidden size={14} /></span><div><strong>取消并释放全部预占</strong><span className="mt-1 block text-xs text-[#667085]">{formatDate(salesOrder.cancellation.occurredAt)} · {salesOrder.cancellation.actorName}</span><p className="mt-2 rounded-md bg-[#fff0f0] px-3 py-2 text-xs leading-5 text-[#8a1c1c]">原因：{salesOrder.cancellation.reason}</p>{canViewAudit ? <Link href={`/audit?detail=${encodeURIComponent(salesOrder.cancellation.auditId)}`} className="mt-2 inline-block font-semibold text-[#1d4ed8]">查看取消审计</Link> : null}</div></div> : null}
+              {salesOrder.outbound ? <div className="grid grid-cols-[24px_1fr] gap-3"><span className="grid size-6 place-items-center rounded-full bg-[#2563eb] text-white"><IconCheck aria-hidden size={14} /></span><div><strong>完成整单出库</strong><span className="mt-1 block text-xs text-[#667085]">{formatDate(salesOrder.outbound.occurredAt)} · {salesOrder.outbound.actorName}</span>{canViewAudit ? <Link href={`/audit?detail=${encodeURIComponent(salesOrder.outbound.auditId)}`} className="mt-2 inline-block font-semibold text-[#1d4ed8]">查看出库审计</Link> : null}</div></div> : null}
               {salesOrder.status === "CONFIRMED" ? <div className="grid grid-cols-[24px_1fr] gap-3"><span className="mt-1 size-3 justify-self-center rounded-full border-2 border-[#98a2b3] bg-white" /><div><strong>等待完整出库</strong><span className="mt-1 block text-xs text-[#667085]">下一步</span></div></div> : null}
             </div>
           </section>

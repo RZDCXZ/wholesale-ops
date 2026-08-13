@@ -217,6 +217,12 @@ export type SalesOrderDetail = {
     occurredAt: Date;
     reason: string;
   } | null;
+  outbound: {
+    auditId: string;
+    actorId: string;
+    actorName: string;
+    occurredAt: Date;
+  } | null;
   items: Array<{
     id: string;
     skuId: string;
@@ -234,8 +240,27 @@ export type SalesOrderDetail = {
     };
     confirmationImpact: SalesOrderInventoryImpact | null;
     cancellationImpact: SalesOrderInventoryImpact | null;
+    outboundImpact: SalesOrderInventoryImpact | null;
   }>;
 };
+
+function inventoryImpactFromMovement(movement: {
+  onHandAfter: number;
+  onHandDelta: number;
+  reservedAfter: number;
+  reservedDelta: number;
+}): SalesOrderInventoryImpact {
+  const onHandBefore = movement.onHandAfter - movement.onHandDelta;
+  const reservedBefore = movement.reservedAfter - movement.reservedDelta;
+  return {
+    onHandBefore,
+    onHandAfter: movement.onHandAfter,
+    reservedBefore,
+    reservedAfter: movement.reservedAfter,
+    availableBefore: onHandBefore - reservedBefore,
+    availableAfter: movement.onHandAfter - movement.reservedAfter,
+  };
+}
 
 export class SalesOrderServiceError extends Error {
   constructor(
@@ -926,8 +951,14 @@ export async function getSalesOrderDetail(
     );
   }
 
-  const [confirmation, cancellation, reservationMovements, releaseMovements] =
-    await Promise.all([
+  const [
+    confirmation,
+    cancellation,
+    outbound,
+    reservationMovements,
+    releaseMovements,
+    outboundMovements,
+  ] = await Promise.all([
     database.businessAudit.findFirst({
       where: {
         objectType: "SALES_ORDER",
@@ -957,6 +988,20 @@ export async function getSalesOrderDetail(
         reason: true,
       },
     }),
+    database.businessAudit.findFirst({
+      where: {
+        objectType: "SALES_ORDER",
+        objectId: order.id,
+        action: "SALES_ORDER_OUTBOUND",
+      },
+      orderBy: [{ occurredAt: "asc" }, { id: "asc" }],
+      select: {
+        id: true,
+        actorId: true,
+        actorName: true,
+        occurredAt: true,
+      },
+    }),
     database.inventoryMovement.findMany({
       where: {
         relatedType: "SALES_ORDER",
@@ -973,12 +1018,23 @@ export async function getSalesOrderDetail(
       },
       orderBy: [{ occurredAt: "asc" }, { id: "asc" }],
     }),
+    database.inventoryMovement.findMany({
+      where: {
+        relatedType: "SALES_ORDER",
+        relatedId: order.id,
+        movementType: "OUTBOUND",
+      },
+      orderBy: [{ occurredAt: "asc" }, { id: "asc" }],
+    }),
   ]);
   const movementBySkuId = new Map(
     reservationMovements.map((movement) => [movement.skuId, movement]),
   );
   const releaseMovementBySkuId = new Map(
     releaseMovements.map((movement) => [movement.skuId, movement]),
+  );
+  const outboundMovementBySkuId = new Map(
+    outboundMovements.map((movement) => [movement.skuId, movement]),
   );
   const canEditDraft =
     order.status === "DRAFT" &&
@@ -1032,39 +1088,28 @@ export async function getSalesOrderDetail(
           reason: cancellation.reason ?? "",
         }
       : null,
+    outbound: outbound
+      ? {
+          auditId: outbound.id,
+          actorId: outbound.actorId,
+          actorName: outbound.actorName,
+          occurredAt: outbound.occurredAt,
+        }
+      : null,
     items: order.items.map((item) => {
       const onHandQuantity = item.sku.inventoryBalance?.onHandQuantity ?? 0;
       const reservedQuantity = item.sku.inventoryBalance?.reservedQuantity ?? 0;
       const movement = movementBySkuId.get(item.skuId);
       const releaseMovement = releaseMovementBySkuId.get(item.skuId);
+      const outboundMovement = outboundMovementBySkuId.get(item.skuId);
       const confirmationImpact = movement
-        ? {
-            onHandBefore: movement.onHandAfter - movement.onHandDelta,
-            onHandAfter: movement.onHandAfter,
-            reservedBefore: movement.reservedAfter - movement.reservedDelta,
-            reservedAfter: movement.reservedAfter,
-            availableBefore:
-              movement.onHandAfter -
-              movement.onHandDelta -
-              (movement.reservedAfter - movement.reservedDelta),
-            availableAfter: movement.onHandAfter - movement.reservedAfter,
-          }
+        ? inventoryImpactFromMovement(movement)
         : null;
       const cancellationImpact = releaseMovement
-        ? {
-            onHandBefore:
-              releaseMovement.onHandAfter - releaseMovement.onHandDelta,
-            onHandAfter: releaseMovement.onHandAfter,
-            reservedBefore:
-              releaseMovement.reservedAfter - releaseMovement.reservedDelta,
-            reservedAfter: releaseMovement.reservedAfter,
-            availableBefore:
-              releaseMovement.onHandAfter -
-              releaseMovement.onHandDelta -
-              (releaseMovement.reservedAfter - releaseMovement.reservedDelta),
-            availableAfter:
-              releaseMovement.onHandAfter - releaseMovement.reservedAfter,
-          }
+        ? inventoryImpactFromMovement(releaseMovement)
+        : null;
+      const outboundImpact = outboundMovement
+        ? inventoryImpactFromMovement(outboundMovement)
         : null;
       return {
         id: item.id,
@@ -1083,6 +1128,7 @@ export async function getSalesOrderDetail(
         },
         confirmationImpact,
         cancellationImpact,
+        outboundImpact,
       };
     }),
   };

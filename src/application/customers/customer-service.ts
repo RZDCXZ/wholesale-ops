@@ -523,18 +523,16 @@ export async function reassignCustomer(
       Array<{
         id: string;
         customerCode: string;
-        responsibleSalesName: string;
+        responsibleSalesId: string;
       }>
     >`
       SELECT
         customer."id",
         customer."customerCode",
-        responsible_sales."name" AS "responsibleSalesName"
+        customer."responsibleSalesId"
       FROM "customer" AS customer
-      JOIN "user" AS responsible_sales
-        ON responsible_sales."id" = customer."responsibleSalesId"
       WHERE customer."id" = ${parsed.customerId}
-      FOR UPDATE OF customer
+      FOR UPDATE
     `;
     const current = currentRows[0];
     if (!current) {
@@ -543,6 +541,10 @@ export async function reassignCustomer(
         "客户不存在或不可访问。",
       );
     }
+    const currentResponsibleSales = await transaction.user.findUniqueOrThrow({
+      where: { id: current.responsibleSalesId },
+      select: { name: true },
+    });
     const responsibleSalesId = await resolveResponsibleSalesId(
       transaction,
       actor,
@@ -562,7 +564,7 @@ export async function reassignCustomer(
         objectType: "CUSTOMER",
         objectId: updated.id,
         referenceCode: updated.customerCode,
-        summary: `客户负责人由「${current.responsibleSalesName}」调整为「${updated.responsibleSales.name}」`,
+        summary: `客户负责人由「${currentResponsibleSales.name}」调整为「${updated.responsibleSales.name}」`,
       },
     });
 
