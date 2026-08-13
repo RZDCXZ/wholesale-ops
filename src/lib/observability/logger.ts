@@ -25,23 +25,37 @@ function removeSensitiveFields(
     return value;
   }
 
+  if (Array.isArray(value)) {
+    if (seen.has(value)) {
+      return "[Circular]";
+    }
+
+    seen.add(value);
+    const sanitized = value.map((item) => removeSensitiveFields(item, seen));
+    seen.delete(value);
+    return sanitized;
+  }
+
+  const prototype = Object.getPrototypeOf(value);
+
+  if (prototype !== Object.prototype && prototype !== null) {
+    return value;
+  }
+
   if (seen.has(value)) {
     return "[Circular]";
   }
 
   seen.add(value);
-
-  if (Array.isArray(value)) {
-    return value.map((item) => removeSensitiveFields(item, seen));
-  }
-
-  return Object.fromEntries(
+  const sanitized = Object.fromEntries(
     Object.entries(value).flatMap(([key, nestedValue]) =>
       sensitiveFieldNames.has(key.toLowerCase())
         ? []
         : [[key, removeSensitiveFields(nestedValue, seen)]],
     ),
   );
+  seen.delete(value);
+  return sanitized;
 }
 
 export function createAppLogger(destination?: WriteStreamLike): Logger {

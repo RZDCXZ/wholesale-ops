@@ -63,4 +63,26 @@ describe("createAppLogger", () => {
       /nested-password-secret|nested-cookie-secret|nested-authorization-secret|nested-session-secret|nested-token-secret|arbitrary-depth-password-secret/,
     );
   });
+
+  it("脱敏时保留错误、日期与非循环共享结构的诊断信息", () => {
+    let output = "";
+    const logger = createAppLogger({
+      write(chunk: string) {
+        output += chunk;
+      },
+    });
+    const sharedContext = { operation: "owner-login" };
+
+    logger.error({
+      err: new Error("diagnostic-boom"),
+      at: new Date("2026-08-13T00:00:00.000Z"),
+      first: sharedContext,
+      second: sharedContext,
+    });
+
+    expect(output).toContain("diagnostic-boom");
+    expect(output).toContain("2026-08-13T00:00:00.000Z");
+    expect(output.match(/owner-login/g)).toHaveLength(2);
+    expect(output).not.toContain("[Circular]");
+  });
 });
