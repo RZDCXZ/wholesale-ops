@@ -63,6 +63,7 @@ type Phase =
   | "uploading"
   | "preview"
   | "confirming"
+  | "confirm-error"
   | "success"
   | "duplicate"
   | "request-error";
@@ -139,14 +140,26 @@ export function SkuImportWorkbench() {
       };
       if (!response.ok) {
         setRequestError(body.message ?? "确认导入失败，请重新上传校验。");
-        setPhase(body.code === "DUPLICATE_SUBMISSION" ? "duplicate" : "request-error");
+        const previewMustBeRecreated = [
+          "FORBIDDEN",
+          "PREVIEW_FORBIDDEN",
+          "PREVIEW_INVALID",
+          "PREVIEW_STALE",
+        ].includes(body.code ?? "");
+        setPhase(
+          body.code === "DUPLICATE_SUBMISSION"
+            ? "duplicate"
+            : previewMustBeRecreated
+              ? "request-error"
+              : "confirm-error",
+        );
         return;
       }
       setSuccess(body);
       setPhase("success");
     } catch {
       setRequestError("无法连接到服务，请稍后重试。");
-      setPhase("request-error");
+      setPhase("confirm-error");
     }
   }
 
@@ -215,8 +228,8 @@ export function SkuImportWorkbench() {
             <div className="grid gap-4"><Notice tone="danger" title={`发现 ${preview.errors.length} 条错误（${errorRowCount} 行），整批不会写入`} message={`请修正源文件后重新上传；当前 ${preview.validRows.length} 条正确记录不会单独写入。`} action={<Button onClick={reset}>重新选择文件</Button>} /><ValidRowsTable rows={preview.validRows} /><ErrorRowsTable errors={preview.errors} /></div>
           ) : null}
 
-          {(phase === "preview" || phase === "confirming") && preview?.status === "ready" ? (
-            <div className="grid gap-4"><Notice tone="success" title={`${preview.totalRows} 行数据全部通过校验`} message="确认时会重新校验当前操作者和 SKU 编码；所有 SKU 与业务审计在单一事务中写入。" /><ValidRowsTable rows={preview.validRows} /><div className="flex justify-end gap-2 border-t border-[#e4e7ec] pt-4"><Button onClick={reset} disabled={phase === "confirming"}>重新上传</Button><Button variant="primary" onClick={confirmImport} disabled={phase === "confirming"}>{phase === "confirming" ? <><IconLoader2 aria-hidden className="animate-spin" size={17} />正在确认</> : `确认导入 ${preview.totalRows} 个 SKU`}</Button></div></div>
+          {(["preview", "confirming", "confirm-error"] as Phase[]).includes(phase) && preview?.status === "ready" ? (
+            <div className="grid gap-4">{phase === "confirm-error" ? <Notice tone="danger" title="确认失败，可以直接重试" message={requestError ?? "服务暂时不可用，请重试。"} /> : <Notice tone="success" title={`${preview.totalRows} 行数据全部通过校验`} message="确认时会重新校验当前操作者和 SKU 编码；所有 SKU 与业务审计在单一事务中写入。" />}<ValidRowsTable rows={preview.validRows} /><div className="flex justify-end gap-2 border-t border-[#e4e7ec] pt-4"><Button onClick={reset} disabled={phase === "confirming"}>重新上传</Button><Button variant="primary" onClick={confirmImport} disabled={phase === "confirming"}>{phase === "confirming" ? <><IconLoader2 aria-hidden className="animate-spin" size={17} />正在确认</> : phase === "confirm-error" ? "重试确认" : `确认导入 ${preview.totalRows} 个 SKU`}</Button></div></div>
           ) : null}
 
           {phase === "success" && success ? (

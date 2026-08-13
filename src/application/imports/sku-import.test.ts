@@ -151,6 +151,35 @@ describe("SKU Excel 导入", () => {
     });
   });
 
+  it("拒绝改名为 .xlsx 的其他 ZIP 表格格式", () => {
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(
+      workbook,
+      XLSX.utils.aoa_to_sheet([
+        ["SKU 编码", "名称", "分类", "库存单位", "参考售价", "预警值", "启用状态"],
+        ["WJ-ODS-001", "伪装表格", "测试", "个", 1, 0, "启用"],
+      ]),
+      "SKU导入",
+    );
+
+    const result = previewSkuImportFile(
+      owner,
+      {
+        name: "renamed.xlsx",
+        bytes: new Uint8Array(
+          XLSX.write(workbook, { type: "array", bookType: "ods" }),
+        ),
+      },
+      new Set(),
+    );
+
+    expect(result).toEqual({
+      status: "rejected",
+      code: "FILE_TYPE_INVALID",
+      message: "只接受 .xlsx 文件。",
+    });
+  });
+
   it("在解析前拒绝超过 10 MB 的文件", () => {
     const result = previewSkuImportFile(
       owner,

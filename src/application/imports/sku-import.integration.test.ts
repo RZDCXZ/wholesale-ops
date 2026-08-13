@@ -212,6 +212,47 @@ describe("SKU Excel 导入事务", () => {
     ]);
   });
 
+  it("一次预览同时返回字段错误和数据库既有编码错误", async () => {
+    await createSku(prisma, owner, {
+      skuCode: "WJ-MIXED-EXISTING",
+      name: "数据库既有 SKU",
+      category: "测试",
+      inventoryUnit: "个",
+      referencePrice: "1.00",
+      warningThreshold: 0,
+      enabled: true,
+    });
+
+    const preview = await previewSkuImport(
+      prisma,
+      owner,
+      createWorkbookFile([
+        ["WJ-MIXED-INVALID", "金额错误 SKU", "测试", "个", "非法金额", 0, "启用"],
+        ["WJ-MIXED-EXISTING", "编码冲突 SKU", "测试", "个", 2, 0, "启用"],
+      ]),
+      tokenContext,
+    );
+
+    expect(preview).toMatchObject({
+      status: "invalid",
+      validRows: [],
+      errors: expect.arrayContaining([
+        expect.objectContaining({
+          rowNumber: 2,
+          field: "参考售价",
+          reason: "必须是最多两位小数的非负人民币金额。",
+        }),
+        expect.objectContaining({
+          rowNumber: 3,
+          field: "SKU 编码",
+          value: "WJ-MIXED-EXISTING",
+          reason: "SKU 编码已存在。",
+        }),
+      ]),
+    });
+    expect("previewToken" in preview).toBe(false);
+  });
+
   it("事务末段失败时已经创建的 SKU 也全部回滚", async () => {
     const preview = await previewSkuImport(
       prisma,

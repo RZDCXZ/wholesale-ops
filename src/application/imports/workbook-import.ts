@@ -35,6 +35,21 @@ export type ImportWorksheetResult =
   | ImportFileRejection
   | { status: "ready"; rows: ImportWorksheetRow[] };
 
+function isXlsxContainer(bytes: Uint8Array): boolean {
+  try {
+    const container = XLSX.CFB.read(bytes, { type: "buffer" });
+    const contentTypes = XLSX.CFB.find(container, "/[Content_Types].xml");
+    const workbook = XLSX.CFB.find(container, "/xl/workbook.xml");
+    if (!contentTypes?.content || !workbook) return false;
+
+    return Buffer.from(contentTypes.content).toString("utf8").includes(
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml",
+    );
+  } catch {
+    return false;
+  }
+}
+
 export function readImportWorksheet(
   file: ImportFile,
   template: ImportWorksheetTemplate,
@@ -84,6 +99,13 @@ export function readImportWorksheet(
       status: "rejected",
       code: "MACRO_NOT_ALLOWED",
       message: "不接受包含宏的工作簿。",
+    };
+  }
+  if (!isXlsxContainer(file.bytes)) {
+    return {
+      status: "rejected",
+      code: "FILE_TYPE_INVALID",
+      message: "只接受 .xlsx 文件。",
     };
   }
   if (workbook.SheetNames[0] !== template.worksheetName) {

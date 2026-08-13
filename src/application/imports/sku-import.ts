@@ -85,6 +85,17 @@ export type IssuedSkuImportPreview =
       expiresAt: Date;
     });
 
+type ParsedSkuImport =
+  | ImportFileRejection
+  | {
+      status: "parsed";
+      fileName: string;
+      totalRows: number;
+      validRows: SkuImportRow[];
+      errors: ImportRowError[];
+      skuCodeRows: Array<{ rowNumber: number; skuCode: string }>;
+    };
+
 const previewPayloadSchema = z
   .object({
     version: z.literal(1),
@@ -230,11 +241,10 @@ function readPreviewToken(
   }
 }
 
-export function previewSkuImportFile(
+function parseSkuImportFile(
   actor: Actor,
   file: ImportFile,
-  existingSkuCodes: ReadonlySet<string>,
-): SkuImportPreview {
+): ParsedSkuImport {
   if (authorizeCapability(actor, "IMPORTS_MANAGE").kind !== "authorized") {
     throw new SkuImportError(
       "FORBIDDEN",
@@ -354,49 +364,81 @@ export function previewSkuImportFile(
     },
   );
 
-  const codeCounts = new Map<string, number>();
-  for (const row of worksheet.rows) {
-    if (row.formulas.some(({ columnIndex }) => columnIndex === 0)) continue;
+  const skuCodeRows = worksheet.rows.flatMap((row) => {
+    if (row.formulas.some(({ columnIndex }) => columnIndex === 0)) return [];
     const skuCode = cellText(row.values[0]);
-    if (skuCode) codeCounts.set(skuCode, (codeCounts.get(skuCode) ?? 0) + 1);
+    return skuCode ? [{ rowNumber: row.rowNumber, skuCode }] : [];
+  });
+  const codeCounts = new Map<string, number>();
+  for (const { skuCode } of skuCodeRows) {
+    codeCounts.set(skuCode, (codeCounts.get(skuCode) ?? 0) + 1);
   }
   const duplicateCodes = new Set(
     [...codeCounts].filter(([, count]) => count > 1).map(([skuCode]) => skuCode),
   );
-  for (const row of worksheet.rows) {
-    const skuCode = cellText(row.values[0]);
+  for (const { rowNumber, skuCode } of skuCodeRows) {
     if (duplicateCodes.has(skuCode)) {
       errors.push({
-        rowNumber: row.rowNumber,
+        rowNumber,
         field: "SKU 编码",
         value: skuCode,
         reason: "文件内 SKU 编码重复。",
       });
     }
   }
-  for (const row of candidateRows) {
-    if (existingSkuCodes.has(row.skuCode)) {
-      errors.push({
-        rowNumber: row.rowNumber,
-        field: "SKU 编码",
-        value: row.skuCode,
-        reason: "SKU 编码已存在。",
-      });
-    }
-  }
   const validRows = candidateRows.filter(
-    ({ skuCode }) =>
-      !duplicateCodes.has(skuCode) && !existingSkuCodes.has(skuCode),
+    ({ skuCode }) => !duplicateCodes.has(skuCode),
   );
 
-  const preview = {
+  return {
+    status: "parsed",
     fileName: file.name,
     totalRows: worksheet.rows.length,
     validRows,
+    errors,
+    skuCodeRows,
+  };
+}
+
+function buildSkuImportPreview(
+  parsed: Exclude<ParsedSkuImport, ImportFileRejection>,
+  existingSkuCodes: ReadonlySet<string>,
+): SkuImportPreview {
+  const existingCodeErrors = parsed.skuCodeRows.flatMap(
+    ({ rowNumber, skuCode }) =>
+      existingSkuCodes.has(skuCode)
+        ? [
+            {
+              rowNumber,
+              field: "SKU 编码",
+              value: skuCode,
+              reason: "SKU 编码已存在。",
+            },
+          ]
+        : [],
+  );
+  const errors = [...parsed.errors, ...existingCodeErrors];
+  const preview = {
+    fileName: parsed.fileName,
+    totalRows: parsed.totalRows,
+    validRows: parsed.validRows.filter(
+      ({ skuCode }) => !existingSkuCodes.has(skuCode),
+    ),
   };
   return errors.length === 0
     ? { status: "ready", ...preview, errors: [] }
     : { status: "invalid", ...preview, errors };
+}
+
+export function previewSkuImportFile(
+  actor: Actor,
+  file: ImportFile,
+  existingSkuCodes: ReadonlySet<string>,
+): SkuImportPreview {
+  const parsed = parseSkuImportFile(actor, file);
+  return parsed.status === "rejected"
+    ? parsed
+    : buildSkuImportPreview(parsed, existingSkuCodes);
 }
 
 export async function previewSkuImport(
@@ -405,18 +447,17 @@ export async function previewSkuImport(
   file: ImportFile,
   tokenContext: ImportTokenContext,
 ): Promise<IssuedSkuImportPreview> {
-  const initialPreview = previewSkuImportFile(actor, file, new Set());
-  if (initialPreview.status !== "ready") return initialPreview;
+  const parsed = parseSkuImportFile(actor, file);
+  if (parsed.status === "rejected") return parsed;
 
   const existing = await database.sku.findMany({
     where: {
-      skuCode: { in: initialPreview.validRows.map(({ skuCode }) => skuCode) },
+      skuCode: { in: parsed.skuCodeRows.map(({ skuCode }) => skuCode) },
     },
     select: { skuCode: true },
   });
-  const preview = previewSkuImportFile(
-    actor,
-    file,
+  const preview = buildSkuImportPreview(
+    parsed,
     new Set(existing.map(({ skuCode }) => skuCode)),
   );
   if (preview.status !== "ready") return preview;

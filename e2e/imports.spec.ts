@@ -128,6 +128,41 @@ test("销售不能打开或调用 SKU 导入入口", async ({ page }) => {
   expect(statuses).toEqual([403, 403, 403]);
 });
 
+test("确认请求暂时失败时保留预览并允许直接重试", async ({ page }) => {
+  const suffix = Date.now().toString(36);
+  const validFile = createWorkbookFile(
+    [[`E2E-RETRY-${suffix}`, "可重试 SKU", "测试", "个", 1, 0, "启用"]],
+    `retry-${suffix}`,
+  );
+
+  try {
+    await signIn(page, "owner@example.local", /\/overview$/);
+    await page.goto("/imports");
+    await expect(async () => {
+      const chooserPromise = page.waitForEvent("filechooser", { timeout: 1_000 });
+      await page.getByRole("button", { name: "选择文件", exact: true }).click();
+      const chooser = await chooserPromise;
+      await chooser.setFiles(validFile);
+    }).toPass({ timeout: 10_000 });
+    await expect(page.getByText("1 行数据全部通过校验", { exact: true })).toBeVisible();
+
+    await page.route("**/api/imports/sku/confirm", async (route) => {
+      await route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ message: "服务暂时不可用。" }),
+      });
+    });
+    await page.getByRole("button", { name: "确认导入 1 个 SKU" }).click();
+
+    await expect(page.getByText("服务暂时不可用。", { exact: true })).toBeVisible();
+    await expect(page.getByText(`E2E-RETRY-${suffix}`, { exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "重试确认" })).toBeVisible();
+  } finally {
+    unlinkSync(validFile);
+  }
+});
+
 test("导入工作台在 390px 宽度下没有页面级横向溢出", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await signIn(page, "owner@example.local", /\/overview$/);
