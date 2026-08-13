@@ -25,6 +25,10 @@ function removeSensitiveFields(
     return value;
   }
 
+  if (value instanceof Date) {
+    return value;
+  }
+
   if (Array.isArray(value)) {
     if (seen.has(value)) {
       return "[Circular]";
@@ -36,18 +40,12 @@ function removeSensitiveFields(
     return sanitized;
   }
 
-  const prototype = Object.getPrototypeOf(value);
-
-  if (prototype !== Object.prototype && prototype !== null) {
-    return value;
-  }
-
   if (seen.has(value)) {
     return "[Circular]";
   }
 
   seen.add(value);
-  const sanitized = Object.fromEntries(
+  const sanitizedFields = Object.fromEntries(
     Object.entries(value).flatMap(([key, nestedValue]) =>
       sensitiveFieldNames.has(key.toLowerCase())
         ? []
@@ -55,7 +53,21 @@ function removeSensitiveFields(
     ),
   );
   seen.delete(value);
-  return sanitized;
+
+  if (value instanceof Error) {
+    return {
+      ...sanitizedFields,
+      type: value.name,
+      message: value.message,
+      stack: value.stack,
+    };
+  }
+
+  if (Object.keys(sanitizedFields).length === 0 && Object.keys(value).length === 0) {
+    return value;
+  }
+
+  return sanitizedFields;
 }
 
 export function createAppLogger(destination?: WriteStreamLike): Logger {

@@ -72,17 +72,29 @@ describe("createAppLogger", () => {
       },
     });
     const sharedContext = { operation: "owner-login" };
+    class LibraryContext {
+      operation = "library-login";
+      password = "class-password-secret";
+    }
+    const error = Object.assign(new Error("diagnostic-boom"), {
+      requestId: "request-safe-value",
+      token: "error-token-secret",
+    });
 
     logger.error({
-      err: new Error("diagnostic-boom"),
+      err: error,
       at: new Date("2026-08-13T00:00:00.000Z"),
       first: sharedContext,
       second: sharedContext,
+      library: new LibraryContext(),
     });
 
     expect(output).toContain("diagnostic-boom");
     expect(output).toContain("2026-08-13T00:00:00.000Z");
     expect(output.match(/owner-login/g)).toHaveLength(2);
+    expect(output).toContain("request-safe-value");
+    expect(output).toContain("library-login");
+    expect(output).not.toMatch(/class-password-secret|error-token-secret/);
     expect(output).not.toContain("[Circular]");
   });
 });
