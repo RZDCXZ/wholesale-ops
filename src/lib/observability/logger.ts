@@ -4,24 +4,25 @@ type WriteStreamLike = {
   write(chunk: string): unknown;
 };
 
-const sensitivePaths = [
+const sensitiveFieldNames = [
   "password",
-  "*.password",
   "cookie",
-  "*.cookie",
+  "Cookie",
   "authorization",
-  "*.authorization",
-  "headers.cookie",
-  "headers.authorization",
-  "req.headers.cookie",
-  "req.headers.authorization",
-  "request.headers.cookie",
-  "request.headers.authorization",
+  "Authorization",
   "session",
-  "*.session",
   "token",
-  "*.token",
+  "sessionToken",
+  "accessToken",
+  "refreshToken",
+  "idToken",
 ];
+
+const sensitivePaths = sensitiveFieldNames.flatMap((fieldName) =>
+  Array.from({ length: 5 }, (_, depth) =>
+    depth === 0 ? fieldName : `${"*.".repeat(depth)}${fieldName}`,
+  ),
+);
 
 export function createAppLogger(destination?: WriteStreamLike): Logger {
   return pino(

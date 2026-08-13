@@ -93,7 +93,7 @@ export function LoginForm() {
           defaultValue="owner@example.local"
           aria-invalid={Boolean(fieldErrors.email)}
           aria-describedby={fieldErrors.email ? "email-error" : undefined}
-          className="min-h-[38px] rounded-[7px] border border-[#d0d5dd] bg-white px-3 text-[13px] font-normal text-[#344054] outline-none focus:border-[#2563eb] focus:ring-3 focus:ring-blue-500/15"
+          className="min-h-11 rounded-[7px] border border-[#d0d5dd] bg-white px-3 text-[13px] font-normal text-[#344054] outline-none focus:border-[#2563eb] focus:ring-3 focus:ring-blue-500/15"
         />
         {fieldErrors.email ? (
           <span id="email-error" className="font-normal text-[#c62828]">
@@ -113,7 +113,7 @@ export function LoginForm() {
           defaultValue="demo123456"
           aria-invalid={Boolean(fieldErrors.password)}
           aria-describedby={fieldErrors.password ? "password-error" : undefined}
-          className="min-h-[38px] rounded-[7px] border border-[#d0d5dd] bg-white px-3 text-[13px] font-normal text-[#344054] outline-none focus:border-[#2563eb] focus:ring-3 focus:ring-blue-500/15"
+          className="min-h-11 rounded-[7px] border border-[#d0d5dd] bg-white px-3 text-[13px] font-normal text-[#344054] outline-none focus:border-[#2563eb] focus:ring-3 focus:ring-blue-500/15"
         />
         {fieldErrors.password ? (
           <span id="password-error" className="font-normal text-[#c62828]">

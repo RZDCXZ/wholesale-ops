@@ -63,3 +63,23 @@ test("退出后原会话不能继续访问老板工作区", async ({ page }) => 
   await page.goto("/overview");
   await expect(page).toHaveURL(/\/login$/);
 });
+
+test("390px 下关键控件可触达且账号菜单展示角色", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/login");
+
+  for (const fieldName of ["邮箱", "密码"]) {
+    const box = await page.getByLabel(fieldName).boundingBox();
+    expect(box?.height).toBeGreaterThanOrEqual(44);
+  }
+
+  await signInAsOwner(page);
+
+  const navigationButton = page.getByRole("button", { name: "打开导航" });
+  const navigationBox = await navigationButton.boundingBox();
+  expect(navigationBox?.width).toBeGreaterThanOrEqual(44);
+  expect(navigationBox?.height).toBeGreaterThanOrEqual(44);
+
+  await page.getByRole("button", { name: "张", exact: true }).click();
+  await expect(page.getByRole("menu").getByText("老板", { exact: true })).toBeVisible();
+});

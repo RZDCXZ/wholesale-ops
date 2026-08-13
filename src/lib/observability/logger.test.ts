@@ -26,4 +26,32 @@ describe("createAppLogger", () => {
       /demo-password-secret|demo-cookie-secret|demo-authorization-secret|demo-session-secret|demo-token-secret/,
     );
   });
+
+  it("嵌套请求对象中的认证字段也不会进入日志", () => {
+    let output = "";
+    const logger = createAppLogger({
+      write(chunk: string) {
+        output += chunk;
+      },
+    });
+
+    logger.warn({
+      req: {
+        body: { password: "nested-password-secret" },
+        headers: {
+          cookie: "session=nested-cookie-secret",
+          authorization: "Bearer nested-authorization-secret",
+        },
+        context: {
+          session: "nested-session-secret",
+          token: "nested-token-secret",
+        },
+      },
+      event: "auth.request.rejected",
+    });
+
+    expect(output).not.toMatch(
+      /nested-password-secret|nested-cookie-secret|nested-authorization-secret|nested-session-secret|nested-token-secret/,
+    );
+  });
 });

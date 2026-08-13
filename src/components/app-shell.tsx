@@ -66,7 +66,7 @@ export function AppShell({ actor, children }: { actor: Actor; children: ReactNod
           <button
             type="button"
             aria-label="关闭导航"
-            className="grid size-10 place-items-center rounded-lg border-0 bg-transparent hover:bg-[#f2f4f7] md:hidden"
+            className="grid size-11 place-items-center rounded-lg border-0 bg-transparent hover:bg-[#f2f4f7] md:hidden"
             onClick={() => setIsMobileNavOpen(false)}
           >
             <IconX aria-hidden size={21} />
@@ -99,7 +99,7 @@ export function AppShell({ actor, children }: { actor: Actor; children: ReactNod
             <button
               type="button"
               aria-label="打开导航"
-              className="grid size-10 place-items-center rounded-lg border-0 bg-transparent hover:bg-[#f2f4f7] md:hidden"
+              className="grid size-11 place-items-center rounded-lg border-0 bg-transparent hover:bg-[#f2f4f7] md:hidden"
               onClick={() => setIsMobileNavOpen(true)}
             >
               <IconMenu2 aria-hidden size={22} />
@@ -141,6 +141,11 @@ export function AppShell({ actor, children }: { actor: Actor; children: ReactNod
                   <span className="mt-1 block text-xs text-[#667085]">
                     {actor.email}
                   </span>
+                  <div className="mt-2 flex flex-wrap gap-1.5">
+                    {actor.roles.map((role) => (
+                      <RoleBadge key={role} role={role} />
+                    ))}
+                  </div>
                 </div>
                 {logoutError ? (
                   <p role="alert" className="px-2 pt-2 text-xs text-[#c62828]">

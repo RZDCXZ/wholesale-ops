@@ -4,9 +4,7 @@ import { headers } from "next/headers";
 import { cache } from "react";
 
 import {
-  authorizeActor,
   resolveActor,
-  type Actor,
   type AuthenticationResult,
   type Role,
 } from "@/application/auth/resolve-actor";
@@ -47,16 +45,3 @@ export const getCurrentActor = cache(async (): Promise<AuthenticationResult> => 
 
   return result;
 });
-
-export async function getAuthorizedActor(
-  requiredRole: Role,
-): Promise<Actor | null> {
-  const authentication = await getCurrentActor();
-
-  if (authentication.kind !== "authenticated") {
-    return null;
-  }
-
-  const authorization = authorizeActor(authentication.actor, requiredRole);
-  return authorization.kind === "authorized" ? authorization.actor : null;
-}
