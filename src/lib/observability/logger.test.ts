@@ -46,12 +46,21 @@ describe("createAppLogger", () => {
           session: "nested-session-secret",
           token: "nested-token-secret",
         },
+        deeplyNested: {
+          a: {
+            b: {
+              c: {
+                d: { password: "arbitrary-depth-password-secret" },
+              },
+            },
+          },
+        },
       },
       event: "auth.request.rejected",
     });
 
     expect(output).not.toMatch(
-      /nested-password-secret|nested-cookie-secret|nested-authorization-secret|nested-session-secret|nested-token-secret/,
+      /nested-password-secret|nested-cookie-secret|nested-authorization-secret|nested-session-secret|nested-token-secret|arbitrary-depth-password-secret/,
     );
   });
 });

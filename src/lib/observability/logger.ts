@@ -4,34 +4,55 @@ type WriteStreamLike = {
   write(chunk: string): unknown;
 };
 
-const sensitiveFieldNames = [
+const sensitiveFieldNames = new Set([
   "password",
   "cookie",
-  "Cookie",
+  "set-cookie",
   "authorization",
-  "Authorization",
   "session",
   "token",
-  "sessionToken",
-  "accessToken",
-  "refreshToken",
-  "idToken",
-];
+  "sessiontoken",
+  "accesstoken",
+  "refreshtoken",
+  "idtoken",
+]);
 
-const sensitivePaths = sensitiveFieldNames.flatMap((fieldName) =>
-  Array.from({ length: 5 }, (_, depth) =>
-    depth === 0 ? fieldName : `${"*.".repeat(depth)}${fieldName}`,
-  ),
-);
+function removeSensitiveFields(
+  value: unknown,
+  seen = new WeakSet<object>(),
+): unknown {
+  if (!value || typeof value !== "object") {
+    return value;
+  }
+
+  if (seen.has(value)) {
+    return "[Circular]";
+  }
+
+  seen.add(value);
+
+  if (Array.isArray(value)) {
+    return value.map((item) => removeSensitiveFields(item, seen));
+  }
+
+  return Object.fromEntries(
+    Object.entries(value).flatMap(([key, nestedValue]) =>
+      sensitiveFieldNames.has(key.toLowerCase())
+        ? []
+        : [[key, removeSensitiveFields(nestedValue, seen)]],
+    ),
+  );
+}
 
 export function createAppLogger(destination?: WriteStreamLike): Logger {
   return pino(
     {
       level: process.env.LOG_LEVEL ?? "info",
       base: undefined,
-      redact: {
-        paths: sensitivePaths,
-        remove: true,
+      formatters: {
+        log(object) {
+          return removeSensitiveFields(object) as Record<string, unknown>;
+        },
       },
     },
     destination as DestinationStream | undefined,

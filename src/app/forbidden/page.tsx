@@ -14,7 +14,7 @@ export default function ForbiddenPage() {
         </p>
         <Link
           href="/login"
-          className="mt-5 inline-flex min-h-10 items-center rounded-[7px] bg-[#2563eb] px-4 text-sm font-semibold text-white"
+          className="mt-5 inline-flex min-h-11 items-center rounded-[7px] bg-[#2563eb] px-4 text-sm font-semibold text-white"
         >
           返回登录页
         </Link>
