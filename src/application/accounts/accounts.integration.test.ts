@@ -11,8 +11,11 @@ import {
   AccountServiceError,
   createAccount,
   disableAccount,
+  getBusinessAudit,
   listAccounts,
+  listAccountsPage,
   listBusinessAudit,
+  listBusinessAuditPage,
   updateAccountRoles,
 } from "./account-service";
 import { PrismaClient } from "../../generated/prisma/client";
@@ -240,6 +243,66 @@ describe("账号管理与业务审计", () => {
     ).resolves.toEqual([
       expect.objectContaining({ name: "陈敏", email: "sales@example.local" }),
     ]);
+  });
+
+  it("账号和审计列表分页且审计支持五类筛选与详情读取", async () => {
+    const occurredFrom = new Date(Date.now() - 1_000);
+    await createAccount(
+      prisma,
+      owner,
+      {
+        name: "陈敏",
+        email: "sales@example.local",
+        password: "demo123456",
+        roles: ["SALES"],
+      },
+      hashPassword,
+    );
+    const multi = await createAccount(
+      prisma,
+      owner,
+      {
+        name: "赵磊",
+        email: "multi@example.local",
+        password: "demo123456",
+        roles: ["SALES", "WAREHOUSE"],
+      },
+      hashPassword,
+    );
+
+    await expect(
+      listAccountsPage(prisma, owner, {}, { page: 2, pageSize: 2 }),
+    ).resolves.toMatchObject({ page: 2, pageSize: 2, total: 3, totalPages: 2 });
+
+    const auditPage = await listBusinessAuditPage(
+      prisma,
+      owner,
+      {
+        occurredFrom,
+        occurredTo: new Date(Date.now() + 1_000),
+        actor: "张伟",
+        action: "ACCOUNT_CREATED",
+        objectType: "ACCOUNT",
+        referenceCode: "multi@",
+      },
+      { page: 1, pageSize: 20 },
+    );
+
+    expect(auditPage).toMatchObject({
+      page: 1,
+      pageSize: 20,
+      total: 1,
+      totalPages: 1,
+      items: [
+        expect.objectContaining({
+          objectId: multi.id,
+          referenceCode: "multi@example.local",
+        }),
+      ],
+    });
+    await expect(
+      getBusinessAudit(prisma, owner, auditPage.items[0]!.id),
+    ).resolves.toMatchObject({ objectId: multi.id });
   });
 
   it.each(["SALES", "WAREHOUSE", "FINANCE"] as const)(

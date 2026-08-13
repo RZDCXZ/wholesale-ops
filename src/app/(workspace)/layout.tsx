@@ -15,5 +15,6 @@ export default async function WorkspaceLayout({
     redirect("/login");
   }
 
-  return <AppShell actor={authentication.actor}>{children}</AppShell>;
+  const { name, email, roles } = authentication.actor;
+  return <AppShell actor={{ name, email, roles }}>{children}</AppShell>;
 }

@@ -2,6 +2,8 @@
 
 import { hashPassword } from "better-auth/crypto";
 import { revalidatePath } from "next/cache";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import {
@@ -10,6 +12,7 @@ import {
   disableAccount,
   updateAccountRoles,
 } from "@/application/accounts/account-service";
+import { createAccountActionNotice } from "@/lib/account-action-notice";
 import { prisma } from "@/lib/db";
 import { getActionActor } from "@/lib/server-authorization";
 
@@ -73,6 +76,20 @@ function roleValues(formData: FormData) {
   return formData.getAll("roles").map(String);
 }
 
+async function setAccountActionNotice(actorId: string, auditId: string) {
+  (await cookies()).set(
+    "account-action-notice",
+    createAccountActionNotice(actorId, auditId),
+    {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+    path: "/",
+    maxAge: 60,
+    },
+  );
+}
+
 export async function createAccountAction(
   _previousState: AccountActionState,
   formData: FormData,
@@ -90,13 +107,15 @@ export async function createAccountAction(
 
   try {
     const actor = await getActionActor();
-    await createAccount(prisma, actor, parsed.data, hashPassword);
-    revalidatePath("/settings/accounts");
-    revalidatePath("/audit");
-    return { status: "success", message: "账号已创建。" };
+    const result = await createAccount(prisma, actor, parsed.data, hashPassword);
+    await setAccountActionNotice(actor.id, result.auditId);
   } catch (error) {
     return serviceErrorState(error);
   }
+
+  revalidatePath("/settings/accounts");
+  revalidatePath("/audit");
+  redirect("/settings/accounts");
 }
 
 export async function updateAccountRolesAction(
@@ -114,13 +133,15 @@ export async function updateAccountRolesAction(
 
   try {
     const actor = await getActionActor();
-    await updateAccountRoles(prisma, actor, parsed.data);
-    revalidatePath("/settings/accounts");
-    revalidatePath("/audit");
-    return { status: "success", message: "账号角色已更新。" };
+    const result = await updateAccountRoles(prisma, actor, parsed.data);
+    await setAccountActionNotice(actor.id, result.auditId);
   } catch (error) {
     return serviceErrorState(error);
   }
+
+  revalidatePath("/settings/accounts");
+  revalidatePath("/audit");
+  redirect("/settings/accounts");
 }
 
 export async function disableAccountAction(
@@ -138,14 +159,16 @@ export async function disableAccountAction(
 
   try {
     const actor = await getActionActor();
-    await disableAccount(prisma, actor, {
+    const result = await disableAccount(prisma, actor, {
       accountId: parsed.data.accountId,
       confirmed: true,
     });
-    revalidatePath("/settings/accounts");
-    revalidatePath("/audit");
-    return { status: "success", message: "账号已停用。" };
+    await setAccountActionNotice(actor.id, result.auditId);
   } catch (error) {
     return serviceErrorState(error);
   }
+
+  revalidatePath("/settings/accounts");
+  revalidatePath("/audit");
+  redirect("/settings/accounts");
 }

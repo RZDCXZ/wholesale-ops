@@ -2,27 +2,30 @@
 
 import { IconAlertCircle, IconPlus, IconX } from "@tabler/icons-react";
 import Link from "next/link";
-import { useEffect, useState, type ReactNode } from "react";
-import { useActionState } from "react";
+import {
+  useActionState,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
 import type { Role } from "@/application/auth/resolve-actor";
 import {
-  createAccountAction,
   disableAccountAction,
-  updateAccountRolesAction,
   type AccountActionState,
 } from "@/app/(workspace)/settings/accounts/actions";
 import { Button } from "@/components/ui/button";
 import { RoleBadge } from "@/components/ui/role-badge";
+import { keepFocusInDialog } from "@/lib/dialog-focus";
 
+const initialActionState: AccountActionState = { status: "idle" };
 const roleOptions: Array<{ value: Role; label: string }> = [
   { value: "OWNER", label: "老板" },
   { value: "SALES", label: "销售" },
   { value: "WAREHOUSE", label: "仓库" },
   { value: "FINANCE", label: "财务" },
 ];
-
-const initialAccountActionState: AccountActionState = { status: "idle" };
 
 export type AccountView = {
   id: string;
@@ -32,268 +35,6 @@ export type AccountView = {
   roles: Role[];
   lastSessionAt: string | null;
 };
-
-type DialogState =
-  | { kind: "create" }
-  | { kind: "edit"; account: AccountView }
-  | { kind: "disable"; account: AccountView }
-  | null;
-
-function Dialog({
-  title,
-  children,
-  onClose,
-}: {
-  title: string;
-  children: ReactNode;
-  onClose: () => void;
-}) {
-  return (
-    <div
-      className="fixed inset-0 z-50 grid place-items-center bg-slate-900/35 p-4 max-md:items-end max-md:p-0"
-      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
-    >
-      <section
-        role="dialog"
-        aria-modal="true"
-        aria-label={title}
-        className="flex max-h-[calc(100dvh-32px)] w-full max-w-[600px] flex-col overflow-hidden rounded-[10px] bg-white shadow-2xl max-md:max-h-[90dvh] max-md:rounded-t-[14px] max-md:rounded-b-none"
-      >
-        <header className="flex min-h-[62px] items-center justify-between border-b border-[#e4e7ec] px-[18px] py-3.5">
-          <h2 className="text-lg font-bold">{title}</h2>
-          <button
-            type="button"
-            aria-label="关闭"
-            className="grid size-11 place-items-center rounded-lg border-0 bg-transparent hover:bg-[#f2f4f7]"
-            onClick={onClose}
-          >
-            <IconX aria-hidden size={20} />
-          </button>
-        </header>
-        {children}
-      </section>
-    </div>
-  );
-}
-
-function FormMessage({ state }: { state: AccountActionState }) {
-  if (state.status !== "error" || !state.message) return null;
-
-  return (
-    <div
-      role="alert"
-      className="flex items-center gap-2 rounded-lg border border-[#edb1b1] bg-[#fff0f0] px-3 py-2.5 text-[13px] text-[#c62828]"
-    >
-      <IconAlertCircle aria-hidden size={18} />
-      {state.message}
-    </div>
-  );
-}
-
-function FieldError({ errors }: { errors?: string[] }) {
-  return errors?.[0] ? (
-    <span className="text-xs font-normal text-[#c62828]">{errors[0]}</span>
-  ) : null;
-}
-
-function Field({
-  label,
-  children,
-  errors,
-}: {
-  label: string;
-  children: ReactNode;
-  errors?: string[];
-}) {
-  return (
-    <label className="grid gap-2 text-[13px] font-semibold text-[#475467]">
-      <span>
-        {label} <b className="text-[#c62828]">*</b>
-      </span>
-      {children}
-      <FieldError errors={errors} />
-    </label>
-  );
-}
-
-function RoleFields({
-  defaultRoles = [],
-  errors,
-}: {
-  defaultRoles?: Role[];
-  errors?: string[];
-}) {
-  return (
-    <fieldset className="grid gap-2">
-      <legend className="text-[13px] font-semibold text-[#475467]">
-        固定角色 <b className="text-[#c62828]">*</b>
-      </legend>
-      <div className="grid grid-cols-2 gap-2 max-sm:grid-cols-1">
-        {roleOptions.map(({ value, label }) => (
-          <label
-            key={value}
-            className="flex min-h-11 items-center gap-2 rounded-[7px] border border-[#d0d5dd] px-3 text-sm text-[#344054]"
-          >
-            <input
-              type="checkbox"
-              name="roles"
-              value={value}
-              defaultChecked={defaultRoles.includes(value)}
-              className="size-4 accent-[#2563eb]"
-            />
-            {label}
-          </label>
-        ))}
-      </div>
-      <FieldError errors={errors} />
-    </fieldset>
-  );
-}
-
-function CreateAccountDialog({ onClose }: { onClose: () => void }) {
-  const [state, formAction, pending] = useActionState(
-    createAccountAction,
-    initialAccountActionState,
-  );
-
-  useEffect(() => {
-    if (state.status === "success") onClose();
-  }, [onClose, state.status]);
-
-  return (
-    <Dialog title="新建账号" onClose={onClose}>
-      <form action={formAction} className="flex min-h-0 flex-1 flex-col">
-        <div className="grid gap-4 overflow-y-auto p-5">
-          <FormMessage state={state} />
-          <Field label="姓名" errors={state.fieldErrors?.name}>
-            <input
-              name="name"
-              autoComplete="off"
-              className="min-h-11 rounded-[7px] border border-[#d0d5dd] px-3 font-normal text-[#344054] outline-none focus:border-[#2563eb] focus:ring-3 focus:ring-blue-500/15"
-            />
-          </Field>
-          <Field label="邮箱" errors={state.fieldErrors?.email}>
-            <input
-              name="email"
-              type="email"
-              autoComplete="off"
-              className="min-h-11 rounded-[7px] border border-[#d0d5dd] px-3 font-normal text-[#344054] outline-none focus:border-[#2563eb] focus:ring-3 focus:ring-blue-500/15"
-            />
-          </Field>
-          <Field label="初始密码" errors={state.fieldErrors?.password}>
-            <input
-              name="password"
-              type="password"
-              autoComplete="new-password"
-              className="min-h-11 rounded-[7px] border border-[#d0d5dd] px-3 font-normal text-[#344054] outline-none focus:border-[#2563eb] focus:ring-3 focus:ring-blue-500/15"
-            />
-          </Field>
-          <RoleFields errors={state.fieldErrors?.roles} />
-        </div>
-        <footer className="flex min-h-[66px] justify-end gap-2.5 border-t border-[#e4e7ec] px-[18px] py-[11px]">
-          <Button onClick={onClose}>返回</Button>
-          <Button variant="primary" type="submit" disabled={pending}>
-            {pending ? "创建中…" : "创建账号"}
-          </Button>
-        </footer>
-      </form>
-    </Dialog>
-  );
-}
-
-function EditRolesDialog({
-  account,
-  onClose,
-}: {
-  account: AccountView;
-  onClose: () => void;
-}) {
-  const [state, formAction, pending] = useActionState(
-    updateAccountRolesAction,
-    initialAccountActionState,
-  );
-
-  useEffect(() => {
-    if (state.status === "success") onClose();
-  }, [onClose, state.status]);
-
-  return (
-    <Dialog title="调整账号角色" onClose={onClose}>
-      <form action={formAction} className="flex min-h-0 flex-1 flex-col">
-        <input type="hidden" name="accountId" value={account.id} />
-        <div className="grid gap-4 overflow-y-auto p-5">
-          <FormMessage state={state} />
-          <div className="rounded-[7px] bg-[#f7f9fb] p-3.5">
-            <strong className="block text-sm">{account.name}</strong>
-            <span className="mt-1 block text-xs text-[#667085]">
-              {account.email}
-            </span>
-          </div>
-          <RoleFields
-            defaultRoles={account.roles}
-            errors={state.fieldErrors?.roles}
-          />
-          <p className="text-[13px] leading-6 text-[#667085]">
-            保存后立即按全部已分配角色的权限并集生效，不提供角色模式切换。
-          </p>
-        </div>
-        <footer className="flex min-h-[66px] justify-end gap-2.5 border-t border-[#e4e7ec] px-[18px] py-[11px]">
-          <Button onClick={onClose}>返回</Button>
-          <Button variant="primary" type="submit" disabled={pending}>
-            {pending ? "保存中…" : "保存角色"}
-          </Button>
-        </footer>
-      </form>
-    </Dialog>
-  );
-}
-
-function DisableAccountDialog({
-  account,
-  onClose,
-}: {
-  account: AccountView;
-  onClose: () => void;
-}) {
-  const [state, formAction, pending] = useActionState(
-    disableAccountAction,
-    initialAccountActionState,
-  );
-
-  useEffect(() => {
-    if (state.status === "success") onClose();
-  }, [onClose, state.status]);
-
-  return (
-    <Dialog title="停用账号" onClose={onClose}>
-      <form action={formAction} className="flex min-h-0 flex-1 flex-col">
-        <input type="hidden" name="accountId" value={account.id} />
-        <div className="grid gap-4 overflow-y-auto p-5">
-          <FormMessage state={state} />
-          <p className="text-sm leading-6 text-[#344054]">
-            停用 <strong>{account.name}</strong>（{account.email}）后，将立即撤销其已有会话，该账号也不能再次登录。
-          </p>
-          <label className="flex items-start gap-2.5 rounded-[7px] border border-[#edb1b1] bg-[#fff0f0] p-3 text-[13px] leading-5 text-[#8f1d1d]">
-            <input
-              type="checkbox"
-              name="confirmed"
-              value="yes"
-              className="mt-0.5 size-4 accent-[#c62828]"
-            />
-            我确认停用此账号并撤销已有会话。
-          </label>
-          <FieldError errors={state.fieldErrors?.confirmed} />
-        </div>
-        <footer className="flex min-h-[66px] justify-end gap-2.5 border-t border-[#e4e7ec] px-[18px] py-[11px]">
-          <Button onClick={onClose}>返回</Button>
-          <Button variant="danger" type="submit" disabled={pending}>
-            {pending ? "停用中…" : "确认停用"}
-          </Button>
-        </footer>
-      </form>
-    </Dialog>
-  );
-}
 
 function AccountStatus({ enabled }: { enabled: boolean }) {
   return (
@@ -309,27 +50,122 @@ function AccountStatus({ enabled }: { enabled: boolean }) {
   );
 }
 
-function AccountActions({
+function DisableAccountDialog({
   account,
-  setDialog,
+  onClose,
 }: {
   account: AccountView;
-  setDialog: (dialog: DialogState) => void;
+  onClose: () => void;
+}) {
+  const [state, formAction, pending] = useActionState(
+    disableAccountAction,
+    initialActionState,
+  );
+  const closeButton = useRef<HTMLButtonElement | null>(null);
+  const confirmation = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    closeButton.current?.focus();
+  }, []);
+
+  useEffect(() => {
+    if (state.fieldErrors?.confirmed) confirmation.current?.focus();
+  }, [state]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 grid place-items-center bg-slate-900/35 p-4 max-md:items-end max-md:p-0"
+      onMouseDown={(event) => event.target === event.currentTarget && onClose()}
+    >
+      <section
+        role="dialog"
+        aria-modal="true"
+        aria-label="停用账号"
+        onKeyDown={(event) => keepFocusInDialog(event, onClose)}
+        className="flex max-h-[calc(100dvh-32px)] w-full max-w-[600px] flex-col overflow-hidden rounded-[10px] bg-white shadow-2xl max-md:max-h-[90dvh] max-md:rounded-t-[14px] max-md:rounded-b-none"
+      >
+        <header className="flex min-h-[62px] items-center justify-between border-b border-[#e4e7ec] px-[18px] py-3.5">
+          <h2 className="text-lg font-bold">停用账号</h2>
+          <button
+            ref={closeButton}
+            type="button"
+            aria-label="关闭"
+            className="grid size-11 place-items-center rounded-lg border-0 bg-transparent hover:bg-[#f2f4f7]"
+            onClick={onClose}
+          >
+            <IconX aria-hidden size={20} />
+          </button>
+        </header>
+        <form action={formAction} className="flex min-h-0 flex-1 flex-col">
+          <input type="hidden" name="accountId" value={account.id} />
+          <div className="grid gap-4 overflow-y-auto p-5">
+            {state.status === "error" && state.message ? (
+              <div
+                role="alert"
+                className="flex items-center gap-2 rounded-lg border border-[#edb1b1] bg-[#fff0f0] px-3 py-2.5 text-[13px] text-[#c62828]"
+              >
+                <IconAlertCircle aria-hidden size={18} />
+                {state.message}
+              </div>
+            ) : null}
+            <p className="text-sm leading-6 text-[#344054]">
+              停用 <strong>{account.name}</strong>（{account.email}）后，将立即撤销其已有会话，该账号也不能再次登录。
+            </p>
+            <label className="flex items-start gap-2.5 rounded-[7px] border border-[#edb1b1] bg-[#fff0f0] p-3 text-[13px] leading-5 text-[#8f1d1d]">
+              <input
+                ref={confirmation}
+                type="checkbox"
+                name="confirmed"
+                value="yes"
+                aria-invalid={Boolean(state.fieldErrors?.confirmed)}
+                aria-describedby={
+                  state.fieldErrors?.confirmed ? "disable-confirmation-error" : undefined
+                }
+                className="mt-0.5 size-4 accent-[#c62828]"
+              />
+              我确认停用此账号并撤销已有会话。
+            </label>
+            {state.fieldErrors?.confirmed?.[0] ? (
+              <span
+                id="disable-confirmation-error"
+                className="text-xs text-[#c62828]"
+              >
+                {state.fieldErrors.confirmed[0]}
+              </span>
+            ) : null}
+          </div>
+          <footer className="flex min-h-[66px] justify-end gap-2.5 border-t border-[#e4e7ec] px-[18px] py-[11px]">
+            <Button onClick={onClose}>返回</Button>
+            <Button variant="danger" type="submit" disabled={pending}>
+              {pending ? "停用中…" : "确认停用"}
+            </Button>
+          </footer>
+        </form>
+      </section>
+    </div>
+  );
+}
+
+function AccountActions({
+  account,
+  onDisable,
+}: {
+  account: AccountView;
+  onDisable: (account: AccountView, trigger: HTMLButtonElement) => void;
 }) {
   return (
     <div className="flex flex-wrap gap-1.5">
-      <Button
-        variant="ghost"
-        className="min-h-9 px-2.5 text-[13px]"
-        onClick={() => setDialog({ kind: "edit", account })}
+      <Link
+        href={`/settings/accounts/${account.id}`}
+        className="inline-flex min-h-11 items-center rounded-[7px] px-2.5 text-[13px] font-semibold text-[#344054] hover:bg-[#f2f4f7]"
       >
         编辑角色
-      </Button>
+      </Link>
       {account.enabled ? (
         <Button
           variant="ghost"
-          className="min-h-9 px-2.5 text-[13px] text-[#c62828] hover:bg-[#fff0f0]"
-          onClick={() => setDialog({ kind: "disable", account })}
+          className="min-h-11 px-2.5 text-[13px] text-[#c62828] hover:bg-[#fff0f0]"
+          onClick={(event) => onDisable(account, event.currentTarget)}
         >
           停用
         </Button>
@@ -341,11 +177,63 @@ function AccountActions({
 export function AccountsManager({
   accounts,
   filters,
+  pagination,
 }: {
   accounts: AccountView[];
-  filters: { query: string; role: string; status: string };
+  filters: {
+    query: string;
+    role: string;
+    status: string;
+    pageSize: number;
+    active: boolean;
+  };
+  pagination: {
+    page: number;
+    total: number;
+    totalPages: number;
+    previousHref?: string;
+    nextHref?: string;
+  };
 }) {
-  const [dialog, setDialog] = useState<DialogState>(null);
+  const [disableTarget, setDisableTarget] = useState<AccountView>();
+  const [successNotice, setSuccessNotice] = useState<{
+    message: string;
+    auditHref: string;
+  }>();
+  const dialogTrigger = useRef<HTMLButtonElement | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void fetch("/api/account-action-notice", {
+      method: "POST",
+      signal: controller.signal,
+    })
+      .then(async (response) => {
+        if (response.status !== 200) return;
+        setSuccessNotice(
+          (await response.json()) as { message: string; auditHref: string },
+        );
+      })
+      .catch((error: unknown) => {
+        if (!(error instanceof DOMException && error.name === "AbortError")) {
+          setSuccessNotice(undefined);
+        }
+      });
+    return () => controller.abort();
+  }, []);
+
+  const openDisable = useCallback(
+    (account: AccountView, trigger: HTMLButtonElement) => {
+      dialogTrigger.current = trigger;
+      setDisableTarget(account);
+    },
+    [],
+  );
+
+  const closeDisable = useCallback(() => {
+    setDisableTarget(undefined);
+    requestAnimationFrame(() => dialogTrigger.current?.focus());
+  }, []);
 
   return (
     <>
@@ -358,11 +246,29 @@ export function AccountsManager({
             管理本地演示账号、启用状态与固定角色
           </p>
         </div>
-        <Button variant="primary" onClick={() => setDialog({ kind: "create" })}>
+        <Link
+          href="/settings/accounts/new"
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[7px] border border-[#2563eb] bg-[#2563eb] px-4 text-sm font-semibold text-white hover:bg-[#1d4ed8]"
+        >
           <IconPlus aria-hidden size={17} />
           新建账号
-        </Button>
+        </Link>
       </header>
+
+      {successNotice ? (
+        <div
+          role="status"
+          className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-[#a7d9b6] bg-[#ecfdf3] px-4 py-3 text-[13px] font-semibold text-[#027a48]"
+        >
+          <span>{successNotice.message}</span>
+          <Link
+            href={successNotice.auditHref}
+            className="inline-flex min-h-11 items-center text-[#065f46] underline underline-offset-4"
+          >
+            查看对应审计
+          </Link>
+        </div>
+      ) : null}
 
       <section className="overflow-hidden rounded-lg border border-[#e4e7ec] bg-white">
         <form
@@ -398,6 +304,16 @@ export function AccountsManager({
             <option value="enabled">启用</option>
             <option value="disabled">停用</option>
           </select>
+          <select
+            name="size"
+            defaultValue={String(filters.pageSize)}
+            aria-label="每页条数"
+            className="min-h-11 rounded-[7px] border border-[#d0d5dd] bg-white px-3 text-[13px] text-[#344054]"
+          >
+            <option value="20">每页 20 条</option>
+            <option value="50">每页 50 条</option>
+            <option value="100">每页 100 条</option>
+          </select>
           <Button type="submit">筛选</Button>
           <Link
             href="/settings/accounts"
@@ -410,10 +326,29 @@ export function AccountsManager({
         {accounts.length === 0 ? (
           <div className="grid min-h-72 place-items-center p-6 text-center">
             <div>
-              <h2 className="text-base font-semibold">当前筛选无结果</h2>
+              <h2 className="text-base font-semibold">
+                {filters.active ? "当前筛选无结果" : "系统暂无账号"}
+              </h2>
               <p className="mt-2 text-[13px] text-[#667085]">
-                请调整姓名、邮箱、角色或启用状态后重试。
+                {filters.active
+                  ? "请调整姓名、邮箱、角色或启用状态后重试。"
+                  : "创建第一个本地账号并为其分配固定角色。"}
               </p>
+              {filters.active ? (
+                <Link
+                  href="/settings/accounts"
+                  className="mt-4 inline-flex min-h-11 items-center rounded-[7px] border border-[#d0d5dd] px-4 text-sm font-semibold text-[#344054]"
+                >
+                  清除筛选
+                </Link>
+              ) : (
+                <Link
+                  href="/settings/accounts/new"
+                  className="mt-4 inline-flex min-h-11 items-center rounded-[7px] bg-[#2563eb] px-4 text-sm font-semibold text-white"
+                >
+                  新建账号
+                </Link>
+              )}
             </div>
           </div>
         ) : (
@@ -422,21 +357,16 @@ export function AccountsManager({
               <table className="w-full border-collapse text-left text-[13px]">
                 <thead className="bg-[#f8fafc] text-[#475467]">
                   <tr>
-                    {[
-                      "姓名",
-                      "邮箱",
-                      "角色",
-                      "状态",
-                      "最近会话",
-                      "操作",
-                    ].map((heading) => (
-                      <th
-                        key={heading}
-                        className="border-b border-[#e4e7ec] px-4 py-3 font-semibold whitespace-nowrap"
-                      >
-                        {heading}
-                      </th>
-                    ))}
+                    {["姓名", "邮箱", "角色", "状态", "最近会话", "操作"].map(
+                      (heading) => (
+                        <th
+                          key={heading}
+                          className="border-b border-[#e4e7ec] px-4 py-3 font-semibold whitespace-nowrap"
+                        >
+                          {heading}
+                        </th>
+                      ),
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -458,7 +388,7 @@ export function AccountsManager({
                         {account.lastSessionAt ?? "—"}
                       </td>
                       <td className="px-4 py-3">
-                        <AccountActions account={account} setDialog={setDialog} />
+                        <AccountActions account={account} onDisable={openDisable} />
                       </td>
                     </tr>
                   ))}
@@ -486,28 +416,42 @@ export function AccountsManager({
                   <span className="text-xs text-[#667085]">
                     最近会话：{account.lastSessionAt ?? "—"}
                   </span>
-                  <AccountActions account={account} setDialog={setDialog} />
+                  <AccountActions account={account} onDisable={openDisable} />
                 </article>
               ))}
             </div>
           </>
         )}
+
+        {pagination.total > 0 ? (
+          <footer className="flex items-center justify-between gap-3 border-t border-[#e4e7ec] px-4 py-3 text-[13px] text-[#667085]">
+            <span>
+              共 {pagination.total} 个账号 · 第 {pagination.page}/{pagination.totalPages} 页
+            </span>
+            <div className="flex gap-2">
+              {pagination.previousHref ? (
+                <Link
+                  href={pagination.previousHref}
+                  className="inline-flex min-h-11 items-center rounded-[7px] border border-[#d0d5dd] px-3 font-semibold text-[#344054]"
+                >
+                  上一页
+                </Link>
+              ) : null}
+              {pagination.nextHref ? (
+                <Link
+                  href={pagination.nextHref}
+                  className="inline-flex min-h-11 items-center rounded-[7px] border border-[#d0d5dd] px-3 font-semibold text-[#344054]"
+                >
+                  下一页
+                </Link>
+              ) : null}
+            </div>
+          </footer>
+        ) : null}
       </section>
 
-      {dialog?.kind === "create" ? (
-        <CreateAccountDialog onClose={() => setDialog(null)} />
-      ) : null}
-      {dialog?.kind === "edit" ? (
-        <EditRolesDialog
-          account={dialog.account}
-          onClose={() => setDialog(null)}
-        />
-      ) : null}
-      {dialog?.kind === "disable" ? (
-        <DisableAccountDialog
-          account={dialog.account}
-          onClose={() => setDialog(null)}
-        />
+      {disableTarget ? (
+        <DisableAccountDialog account={disableTarget} onClose={closeDisable} />
       ) : null}
     </>
   );

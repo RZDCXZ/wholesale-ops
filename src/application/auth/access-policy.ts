@@ -65,23 +65,26 @@ export type CapabilityAuthorizationResult =
   | { kind: "authorized"; actor: Actor }
   | { kind: "forbidden" };
 
+function hasCapability(
+  actor: Pick<Actor, "roles">,
+  capability: Capability,
+): boolean {
+  return actor.roles.some((role) => capabilitiesByRole[role].has(capability));
+}
+
 export function authorizeCapability(
   actor: Actor,
   capability: Capability,
 ): CapabilityAuthorizationResult {
-  const allowed = actor.roles.some((role) =>
-    capabilitiesByRole[role].has(capability),
-  );
+  const allowed = hasCapability(actor, capability);
 
   return allowed ? { kind: "authorized", actor } : { kind: "forbidden" };
 }
 
-export function getActorNavigation(actor: Actor): NavigationItem[] {
-  return navigation.filter(
-    ({ capability }) => authorizeCapability(actor, capability).kind === "authorized",
-  );
+export function getActorNavigation(actor: Pick<Actor, "roles">): NavigationItem[] {
+  return navigation.filter(({ capability }) => hasCapability(actor, capability));
 }
 
-export function getActorHomePath(actor: Actor): string {
+export function getActorHomePath(actor: Pick<Actor, "roles">): string {
   return getActorNavigation(actor)[0]?.href ?? "/forbidden";
 }

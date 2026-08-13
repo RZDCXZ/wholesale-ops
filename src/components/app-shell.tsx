@@ -33,7 +33,15 @@ const navigationIcons = {
   "/settings/accounts": IconUser,
 };
 
-export function AppShell({ actor, children }: { actor: Actor; children: ReactNode }) {
+export type AppShellActor = Pick<Actor, "name" | "email" | "roles">;
+
+export function AppShell({
+  actor,
+  children,
+}: {
+  actor: AppShellActor;
+  children: ReactNode;
+}) {
   const router = useRouter();
   const pathname = usePathname();
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
@@ -199,6 +207,7 @@ export function AppShell({ actor, children }: { actor: Actor; children: ReactNod
                 ) : null}
                 <Button
                   role="menuitem"
+                  data-navigation-action="logout"
                   variant="ghost"
                   className="mt-1 w-full justify-start"
                   onClick={signOut}
