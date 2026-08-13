@@ -49,6 +49,35 @@ const statusConfig = {
   },
 } as const;
 
+const inventoryDisplayConfig = {
+  DRAFT: {
+    titleSuffix: "（确认前预估）",
+    impactKey: "confirmationImpact",
+    direction: "reserve",
+    frozenMessage: null,
+  },
+  CONFIRMED: {
+    titleSuffix: "（建立预占）",
+    impactKey: "confirmationImpact",
+    direction: "reserve",
+    frozenMessage: "已确认内容被冻结，仅支持通过后续业务动作继续流转。",
+  },
+  OUTBOUND: {
+    titleSuffix: "（完成出库）",
+    impactKey: "outboundImpact",
+    direction: "outbound",
+    frozenMessage:
+      "销售单已完整交付并永久冻结，不能编辑、删除、取消或重复出库。",
+  },
+  CANCELLED: {
+    titleSuffix: "（释放预占）",
+    impactKey: "cancellationImpact",
+    direction: "release",
+    frozenMessage:
+      "销售单已取消并永久保留，不能重新启用、编辑、删除或再次取消。",
+  },
+} as const;
+
 function first(value: string | string[] | undefined): string {
   return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
 }
@@ -96,6 +125,7 @@ export default async function SalesOrderDetailPage({
   const cancelledNotice = notice === "cancelled" && salesOrder.status === "CANCELLED";
   const outboundNotice = notice === "outbound" && salesOrder.status === "OUTBOUND";
   const status = statusConfig[salesOrder.status];
+  const inventoryDisplay = inventoryDisplayConfig[salesOrder.status];
   const canViewInventory =
     authorizeCapability(actor, "INVENTORY_VIEW").kind === "authorized";
   const canViewAudit =
@@ -278,12 +308,12 @@ export default async function SalesOrderDetailPage({
 
           <section className="overflow-hidden rounded-lg border border-[#e4e7ec] bg-white">
             <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e4e7ec] px-4 py-3.5">
-              <div><h2 className="text-base font-bold">库存影响{salesOrder.status === "DRAFT" ? "（确认前预估）" : salesOrder.status === "CANCELLED" ? "（释放预占）" : salesOrder.status === "OUTBOUND" ? "（完成出库）" : "（建立预占）"}</h2><p className="mt-1 text-xs text-[#667085]">可用量 = 现存量 - 预占量；当前库存数字来自服务端。</p></div>
+              <div><h2 className="text-base font-bold">库存影响{inventoryDisplay.titleSuffix}</h2><p className="mt-1 text-xs text-[#667085]">可用量 = 现存量 - 预占量；当前库存数字来自服务端。</p></div>
               {canViewInventory ? <Link href={`/inventory/ledger?reference=${encodeURIComponent(salesOrder.salesOrderNumber)}`} className="inline-flex min-h-11 items-center rounded-[7px] border border-[#d0d5dd] px-3 text-sm font-semibold text-[#344054]">查看相关库存流水</Link> : null}
             </header>
             <div className="grid gap-3 p-4">
               {salesOrder.items.map((item) => {
-                const impact = (salesOrder.status === "CANCELLED" ? item.cancellationImpact : salesOrder.status === "OUTBOUND" ? item.outboundImpact : item.confirmationImpact) ?? {
+                const impact = item[inventoryDisplay.impactKey] ?? {
                   onHandBefore: item.currentInventory.onHandQuantity,
                   onHandAfter: item.currentInventory.onHandQuantity,
                   reservedBefore: item.currentInventory.reservedQuantity,
@@ -292,12 +322,12 @@ export default async function SalesOrderDetailPage({
                   availableAfter: item.currentInventory.availableQuantity - item.quantity,
                 };
                 const shortage = Math.max(0, item.quantity - item.currentInventory.availableQuantity);
-                return <SalesOrderInventoryRow key={item.id} skuId={item.skuId} initiallyShort={shortage > 0 && salesOrder.status === "DRAFT"}><div><strong className="font-mono text-xs text-[#1d4ed8]">{item.skuCode}</strong><span className="mt-1 block font-semibold">{item.skuName}</span>{salesOrder.status === "DRAFT" ? <SalesOrderItemShortage skuId={item.skuId} requiredQuantity={item.quantity} initialAvailableQuantity={item.currentInventory.availableQuantity} inventoryUnit={item.inventoryUnit} /> : null}</div><SalesOrderInventoryImpacts skuId={item.skuId} quantity={item.quantity} initialImpact={impact} showDeltas direction={salesOrder.status === "CANCELLED" ? "release" : salesOrder.status === "OUTBOUND" ? "outbound" : "reserve"} /></SalesOrderInventoryRow>;
+                return <SalesOrderInventoryRow key={item.id} skuId={item.skuId} initiallyShort={shortage > 0 && salesOrder.status === "DRAFT"}><div><strong className="font-mono text-xs text-[#1d4ed8]">{item.skuCode}</strong><span className="mt-1 block font-semibold">{item.skuName}</span>{salesOrder.status === "DRAFT" ? <SalesOrderItemShortage skuId={item.skuId} requiredQuantity={item.quantity} initialAvailableQuantity={item.currentInventory.availableQuantity} inventoryUnit={item.inventoryUnit} /> : null}</div><SalesOrderInventoryImpacts skuId={item.skuId} quantity={item.quantity} initialImpact={impact} showDeltas direction={inventoryDisplay.direction} /></SalesOrderInventoryRow>;
               })}
             </div>
           </section>
 
-          {salesOrder.status !== "DRAFT" ? <p className="flex items-center gap-2 rounded-lg bg-[#f7f9fb] px-4 py-3 text-[13px] text-[#667085]"><IconLock aria-hidden size={16} />{salesOrder.status === "CANCELLED" ? "销售单已取消并永久保留，不能重新启用、编辑、删除或再次取消。" : salesOrder.status === "OUTBOUND" ? "销售单已完整交付并永久冻结，不能编辑、删除、取消或重复出库。" : "已确认内容被冻结，仅支持通过后续业务动作继续流转。"}</p> : null}
+          {inventoryDisplay.frozenMessage ? <p className="flex items-center gap-2 rounded-lg bg-[#f7f9fb] px-4 py-3 text-[13px] text-[#667085]"><IconLock aria-hidden size={16} />{inventoryDisplay.frozenMessage}</p> : null}
         </main>
 
         <aside className="grid content-start gap-5">
