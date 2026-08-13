@@ -13,6 +13,7 @@ import {
   cancelSalesOrderAction,
   type SalesOrderActionState,
 } from "@/app/(workspace)/sales-orders/actions";
+import type { SalesOrderCancellationPreviewItem } from "@/application/sales-orders/sales-order-service";
 import { Button } from "@/components/ui/button";
 import { keepFocusInDialog } from "@/lib/dialog-focus";
 import { formatQuantity } from "@/lib/format-quantity";
@@ -23,13 +24,7 @@ export type CancelableSalesOrder = {
   id: string;
   salesOrderNumber: string;
   customerName: string;
-  items: Array<{
-    skuId: string;
-    skuCode: string;
-    skuName: string;
-    inventoryUnit: string;
-    quantity: number;
-  }>;
+  items: SalesOrderCancellationPreviewItem[];
 };
 
 function CancelDialog({

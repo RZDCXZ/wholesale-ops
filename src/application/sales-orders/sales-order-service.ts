@@ -92,6 +92,13 @@ export type SalesOrderFilters = {
   createdFrom?: Date;
   createdTo?: Date;
 };
+export type SalesOrderCancellationPreviewItem = {
+  skuId: string;
+  skuCode: string;
+  skuName: string;
+  inventoryUnit: string;
+  quantity: number;
+};
 export type SalesOrderListItem = {
   id: string;
   salesOrderNumber: string;
@@ -107,13 +114,7 @@ export type SalesOrderListItem = {
   canEdit: boolean;
   canDelete: boolean;
   canCancel: boolean;
-  items: Array<{
-    skuId: string;
-    skuCode: string;
-    skuName: string;
-    inventoryUnit: string;
-    quantity: number;
-  }>;
+  items: SalesOrderCancellationPreviewItem[];
 };
 export type SalesOrderListPage = {
   items: SalesOrderListItem[];
@@ -264,6 +265,24 @@ export class SalesOrderServiceError extends Error {
 
 function isOwner(actor: Actor): boolean {
   return actor.roles.includes("OWNER");
+}
+
+function canManageCustomerSalesOrder(
+  actor: Actor,
+  responsibleSalesId: string,
+): boolean {
+  return isOwner(actor) || responsibleSalesId === actor.id;
+}
+
+function canCancelSalesOrderForCustomer(
+  actor: Actor,
+  status: SalesOrderListItem["status"],
+  responsibleSalesId: string,
+): boolean {
+  return (
+    status === "CONFIRMED" &&
+    canManageCustomerSalesOrder(actor, responsibleSalesId)
+  );
 }
 
 function isSerializationFailure(error: unknown): boolean {
@@ -632,9 +651,11 @@ export async function listSalesOrdersPage(
         updatedAt: order.updatedAt,
         canEdit: canManageDraft,
         canDelete: canManageDraft,
-        canCancel:
-          order.status === "CONFIRMED" &&
-          (isOwner(actor) || order.customer.responsibleSalesId === actor.id),
+        canCancel: canCancelSalesOrderForCustomer(
+          actor,
+          order.status,
+          order.customer.responsibleSalesId,
+        ),
         items: order.items.map((item) => ({
           skuId: item.skuId,
           skuCode: item.skuCodeSnapshot,
@@ -989,9 +1010,11 @@ export async function getSalesOrderDetail(
     updatedAt: order.updatedAt,
     canEdit: canEditDraft,
     canConfirm: canConfirmDraft,
-    canCancel:
-      order.status === "CONFIRMED" &&
-      (isOwner(actor) || order.customer.responsibleSalesId === actor.id),
+    canCancel: canCancelSalesOrderForCustomer(
+      actor,
+      order.status,
+      order.customer.responsibleSalesId,
+    ),
     confirmation: confirmation
       ? {
           auditId: confirmation.id,
@@ -1317,17 +1340,19 @@ export async function cancelSalesOrder(
             FOR UPDATE
           `;
           const order = await transaction.salesOrder.findFirst({
-            where: {
-              id: parsed.data.salesOrderId,
-              customer: isOwner(actor)
-                ? undefined
-                : { responsibleSalesId: actor.id },
-            },
+            where: { id: parsed.data.salesOrderId },
             include: {
+              customer: { select: { responsibleSalesId: true } },
               items: { orderBy: [{ position: "asc" }, { id: "asc" }] },
             },
           });
-          if (!order) {
+          if (
+            !order ||
+            !canManageCustomerSalesOrder(
+              actor,
+              order.customer.responsibleSalesId,
+            )
+          ) {
             throw new SalesOrderServiceError(
               "ORDER_NOT_FOUND",
               "销售单不存在或不可取消。",

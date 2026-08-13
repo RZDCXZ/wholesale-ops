@@ -163,6 +163,9 @@ td:nth-last-child(-n+4), th:nth-last-child(-n+4) { font-variant-numeric: tabular
 .timeline .next i { border-style: dashed; border-color: #98a2b3; }
 .timeline strong { font-size: 14px; }
 .timeline span { color: var(--muted); font-size: 13px; line-height: 1.5; }
+.timeline small { color: var(--danger); font-size: 12px; line-height: 1.6; }
+.timeline .cancelled-step i { border-color: var(--danger); color: var(--danger); }
+.timeline .cancelled-step::after { background: #edb1b1; }
 .helper-bar, .privacy-note { min-height: 54px; padding: 12px 16px; display: flex; align-items: center; gap: 10px; background: #fff; border: 1px solid var(--border); border-radius: var(--radius); color: var(--muted); font-size: 13px; }
 .helper-bar .button { margin-left: auto; }
 .privacy-note { margin-bottom: 18px; color: #475467; background: #f8fafc; }
@@ -237,6 +240,7 @@ td:nth-last-child(-n+4), th:nth-last-child(-n+4) { font-variant-numeric: tabular
 .modal-head h2 { font-size: 18px; }
 .modal-body { padding: 20px; overflow: auto; }
 .modal-body > p { font-size: 13px; line-height: 1.7; }
+.modal-body .table-wrap { margin-bottom: 18px; border: 1px solid var(--border); border-radius: 7px; }
 .modal-foot { min-height: 66px; padding: 13px 18px; display: flex; justify-content: flex-end; gap: 10px; border-top: 1px solid var(--border); }
 .confirm-summary { margin-bottom: 18px; display: grid; grid-template-columns: 1fr 1.6fr; border: 1px solid var(--border); border-radius: 7px; overflow: hidden; }
 .confirm-summary > * { padding: 10px 12px; border-bottom: 1px solid var(--border); }

@@ -15,6 +15,7 @@
 - Desktop viewport and screenshot: `1440 × 1024`, CSS pixels, density 1.
 - Mobile viewport override: `390 × 844`; browser content width measured `375px` because of the in-app browser scrollbar. Page scroll width remained `375px`, so no horizontal overflow was present.
 - State: owner / finance multi-role account, sales order `XSD-20260813-0007`, fulfillment state `已确认`, awaiting complete outbound.
+- Cancellation-state screenshots: `design-qa/implementation-cancel-desktop.png` and `design-qa/implementation-cancel-mobile.png`, covering the required per-SKU release summary and the permanent `已取消` detail state.
 
 ## Findings
 
@@ -46,6 +47,7 @@
 - Navigation to经营总览 and chart render.
 - 销售单列表 → 新建销售单 → 确认销售单 → 确认并预占库存.
 - 已确认销售单 → 完成整单出库 confirmation → 已出库 state → associated receivable.
+- 已确认销售单 → 取消销售单 → 核对逐 SKU 释放数量并填写原因 → 已取消永久只读详情.
 - 应收详情 → 登记收款 drawer → 撤销收款 confirmation.
 - 导入工作台 → invalid file state → row-level errors and whole-batch block.
 - Account switch to warehouse role; finance navigation is removed and privacy-boundary copy remains visible.
