@@ -29,6 +29,30 @@ function removeSensitiveFields(
     return value;
   }
 
+  if (!(value instanceof Error)) {
+    try {
+      const toJSON = (value as { toJSON?: unknown }).toJSON;
+
+      if (typeof toJSON === "function") {
+        if (seen.has(value)) {
+          return "[Circular]";
+        }
+
+        seen.add(value);
+        const serialized = toJSON.call(value) as unknown;
+        const sanitized =
+          serialized && typeof serialized === "object"
+            ? removeSensitiveFields(serialized, seen)
+            : {};
+        seen.delete(value);
+        return sanitized;
+      }
+    } catch {
+      seen.delete(value);
+      return {};
+    }
+  }
+
   if (Array.isArray(value)) {
     if (seen.has(value)) {
       return "[Circular]";

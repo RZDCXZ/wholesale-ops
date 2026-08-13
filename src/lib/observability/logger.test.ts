@@ -86,7 +86,10 @@ describe("createAppLogger", () => {
     }
     class JsonLibraryContext {
       toJSON() {
-        return { password: "to-json-password-secret" };
+        return {
+          operation: "to-json-safe-value",
+          password: "to-json-password-secret",
+        };
       }
     }
     const error = Object.assign(new Error("diagnostic-boom"), {
@@ -109,6 +112,7 @@ describe("createAppLogger", () => {
     expect(output.match(/owner-login/g)).toHaveLength(2);
     expect(output).toContain("request-safe-value");
     expect(output).toContain("library-login");
+    expect(output).toContain("to-json-safe-value");
     expect(output).not.toMatch(
       /class-password-secret|error-token-secret|to-json-password-secret/,
     );
