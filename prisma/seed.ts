@@ -60,6 +60,29 @@ const demoAccounts = [
   },
 ] as const;
 
+const demoSkus = [
+  {
+    id: "demo-sku-wj-ls-001",
+    skuCode: "WJ-LS-001",
+    name: "304 不锈钢六角螺栓 M8×30",
+    category: "紧固件",
+    inventoryUnit: "盒",
+    referencePriceFen: 4_850,
+    warningThreshold: 20,
+    enabled: true,
+  },
+  {
+    id: "demo-sku-wj-qp-004",
+    skuCode: "WJ-QP-004",
+    name: "树脂切割片 105mm",
+    category: "切削耗材",
+    inventoryUnit: "片",
+    referencePriceFen: 380,
+    warningThreshold: 15,
+    enabled: true,
+  },
+] as const;
+
 try {
   for (const account of demoAccounts) {
     let user = await prisma.user.findUnique({
@@ -97,7 +120,22 @@ try {
     ]);
   }
 
-  console.log(`已写入 ${demoAccounts.length} 个虚构演示账号。`);
+  for (const sku of demoSkus) {
+    await prisma.sku.upsert({
+      where: { skuCode: sku.skuCode },
+      create: sku,
+      update: {
+        name: sku.name,
+        category: sku.category,
+        inventoryUnit: sku.inventoryUnit,
+        referencePriceFen: sku.referencePriceFen,
+        warningThreshold: sku.warningThreshold,
+        enabled: sku.enabled,
+      },
+    });
+  }
+
+  console.log(`已写入 ${demoAccounts.length} 个虚构演示账号和 ${demoSkus.length} 个虚构 SKU。`);
 } finally {
   await prisma.$disconnect();
 }

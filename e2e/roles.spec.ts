@@ -34,6 +34,7 @@ test("多角色账号使用销售与仓库权限并集且没有角色切换器",
 
   const navigation = page.getByRole("navigation", { name: "主导航" });
   await expect(navigation.getByRole("link", { name: "销售单" })).toBeVisible();
+  await expect(navigation.getByRole("link", { name: "SKU" })).toBeVisible();
   await expect(navigation.getByRole("link", { name: "待出库" })).toBeVisible();
   await expect(navigation.getByRole("link", { name: "应收" })).toHaveCount(0);
   await expect(page.getByRole("button", { name: /赵磊/ })).toContainText("销售");

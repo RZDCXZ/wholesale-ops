@@ -14,12 +14,14 @@ const capabilitiesByRole: Record<Role, Capability[]> = {
   OWNER: [
     "OVERVIEW_VIEW",
     "SALES_ORDERS_VIEW",
+    "SKUS_VIEW",
+    "SKUS_MANAGE",
     "OUTBOUND_VIEW",
     "RECEIVABLES_VIEW",
     "ACCOUNTS_MANAGE",
     "AUDIT_VIEW",
   ],
-  SALES: ["SALES_ORDERS_VIEW"],
+  SALES: ["SALES_ORDERS_VIEW", "SKUS_VIEW"],
   WAREHOUSE: ["OUTBOUND_VIEW"],
   FINANCE: ["RECEIVABLES_VIEW"],
 };
@@ -64,6 +66,7 @@ describe("角色权限", () => {
     );
     expect(getActorNavigation(actor).map(({ href }) => href)).toEqual([
       "/sales-orders",
+      "/skus",
       "/warehouse/outbound",
     ]);
   });

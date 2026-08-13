@@ -102,7 +102,7 @@ export function AuditDetailDrawer({
             href={audit.accountHref}
             className="inline-flex min-h-11 items-center rounded-[7px] border border-[#d0d5dd] px-4 text-sm font-semibold text-[#344054] hover:bg-[#f9fafb]"
           >
-            查看关联账号
+            查看关联记录
           </Link>
         ) : null}
       </aside>

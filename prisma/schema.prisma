@@ -104,3 +104,21 @@ model BusinessAudit {
   @@index([occurredAt])
   @@map("business_audit")
 }
+
+model Sku {
+  id                  String   @id
+  skuCode             String   @unique
+  name                String
+  category            String
+  inventoryUnit       String
+  referencePriceFen   Int
+  warningThreshold    Int
+  enabled             Boolean  @default(true)
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@index([name])
+  @@index([category])
+  @@index([enabled])
+  @@map("sku")
+}

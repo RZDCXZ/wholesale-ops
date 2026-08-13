@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  IconBox,
   IconChartBar,
   IconChevronDown,
   IconChevronRight,
@@ -27,6 +28,7 @@ import { cn } from "@/lib/utils";
 const navigationIcons = {
   "/overview": IconChartBar,
   "/sales-orders": IconFileInvoice,
+  "/skus": IconBox,
   "/warehouse/outbound": IconPackageExport,
   "/receivables": IconReceipt2,
   "/audit": IconShieldCheck,

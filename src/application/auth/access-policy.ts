@@ -3,6 +3,8 @@ import type { Actor, Role } from "./resolve-actor";
 export type Capability =
   | "OVERVIEW_VIEW"
   | "SALES_ORDERS_VIEW"
+  | "SKUS_VIEW"
+  | "SKUS_MANAGE"
   | "OUTBOUND_VIEW"
   | "RECEIVABLES_VIEW"
   | "AUDIT_VIEW"
@@ -27,6 +29,12 @@ const navigation: NavigationItem[] = [
     group: "销售",
     label: "销售单",
     href: "/sales-orders",
+  },
+  {
+    capability: "SKUS_VIEW",
+    group: "销售",
+    label: "SKU",
+    href: "/skus",
   },
   {
     capability: "OUTBOUND_VIEW",
@@ -55,8 +63,11 @@ const navigation: NavigationItem[] = [
 ];
 
 const capabilitiesByRole: Record<Role, ReadonlySet<Capability>> = {
-  OWNER: new Set(navigation.map(({ capability }) => capability)),
-  SALES: new Set(["SALES_ORDERS_VIEW"]),
+  OWNER: new Set([
+    ...navigation.map(({ capability }) => capability),
+    "SKUS_MANAGE",
+  ]),
+  SALES: new Set(["SALES_ORDERS_VIEW", "SKUS_VIEW"]),
   WAREHOUSE: new Set(["OUTBOUND_VIEW"]),
   FINANCE: new Set(["RECEIVABLES_VIEW"]),
 };

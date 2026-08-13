@@ -19,8 +19,15 @@ const actionOptions = [
   { value: "ACCOUNT_CREATED", label: "创建账号" },
   { value: "ACCOUNT_ROLES_UPDATED", label: "调整账号角色" },
   { value: "ACCOUNT_DISABLED", label: "停用账号" },
+  { value: "SKU_CREATED", label: "创建 SKU" },
+  { value: "SKU_UPDATED", label: "编辑 SKU" },
+  { value: "SKU_DISABLED", label: "停用 SKU" },
+  { value: "SKU_DELETED", label: "删除 SKU" },
 ] as const;
-const objectOptions = [{ value: "ACCOUNT", label: "账号" }] as const;
+const objectOptions = [
+  { value: "ACCOUNT", label: "账号" },
+  { value: "SKU", label: "SKU" },
+] as const;
 const actionLabels = Object.fromEntries(
   actionOptions.map(({ value, label }) => [value, label]),
 ) as Record<string, string>;
@@ -306,7 +313,7 @@ export default async function AuditPage({
                   ? "请修正日期范围后重试。"
                   : filtersActive
                   ? "请调整时间、操作者、动作、对象或关联编号后重试。"
-                  : "账号创建、角色调整和停用后会在这里留下记录。"}
+                  : "账号和 SKU 等关键资料发生变更后会在这里留下记录。"}
               </p>
               {filtersActive ? (
                 <Link
@@ -456,6 +463,8 @@ export default async function AuditPage({
             accountHref:
               detailAudit.objectType === "ACCOUNT"
                 ? `/settings/accounts/${detailAudit.objectId}`
+                : detailAudit.objectType === "SKU" && detailAudit.action !== "SKU_DELETED"
+                  ? `/skus/${detailAudit.objectId}`
                 : undefined,
           }}
         />
