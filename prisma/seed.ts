@@ -135,10 +135,75 @@ try {
     });
   }
 
-  const [salesUser, multiUser] = await Promise.all([
+  const [ownerUser, salesUser, multiUser] = await Promise.all([
+    prisma.user.findUniqueOrThrow({ where: { email: "owner@example.local" } }),
     prisma.user.findUniqueOrThrow({ where: { email: "sales@example.local" } }),
     prisma.user.findUniqueOrThrow({ where: { email: "multi@example.local" } }),
   ]);
+
+  const demoInventory = [
+    { skuId: "demo-sku-wj-ls-001", onHandQuantity: 80, reservedQuantity: 0 },
+    { skuId: "demo-sku-wj-qp-004", onHandQuantity: 50, reservedQuantity: 0 },
+  ] as const;
+  const existingBalances = await prisma.inventoryBalance.findMany({
+    where: { skuId: { in: demoInventory.map(({ skuId }) => skuId) } },
+    select: { skuId: true },
+  });
+  const existingSkuIds = new Set(existingBalances.map(({ skuId }) => skuId));
+  const missingInventory = demoInventory.filter(({ skuId }) => !existingSkuIds.has(skuId));
+  if (missingInventory.length > 0) {
+    const importId = "demo-opening-inventory-import";
+    await prisma.$transaction(async (transaction) => {
+      const existingImport = await transaction.dataImport.findUnique({ where: { id: importId } });
+      if (!existingImport) {
+        await transaction.dataImport.create({
+          data: {
+            id: importId,
+            importType: "OPENING_INVENTORY",
+            fileName: "虚构演示期初库存.xlsx",
+            rowCount: missingInventory.length,
+            actorId: ownerUser.id,
+          },
+        });
+      }
+      for (const balance of missingInventory) {
+        await transaction.inventoryBalance.create({ data: balance });
+        await transaction.inventoryMovement.create({
+          data: {
+            id: `demo-opening-${balance.skuId}`,
+            skuId: balance.skuId,
+            movementType: "OPENING",
+            onHandDelta: balance.onHandQuantity,
+            reservedDelta: 0,
+            onHandAfter: balance.onHandQuantity,
+            reservedAfter: 0,
+            relatedType: "DATA_IMPORT",
+            relatedId: importId,
+            relatedReference: "虚构演示期初库存.xlsx",
+            dataImportId: importId,
+            actorId: ownerUser.id,
+            actorName: ownerUser.name,
+          },
+        });
+      }
+      const auditId = "demo-opening-inventory-audit";
+      const existingAudit = await transaction.businessAudit.findUnique({ where: { id: auditId } });
+      if (!existingAudit) {
+        await transaction.businessAudit.create({
+          data: {
+            id: auditId,
+            actorId: ownerUser.id,
+            actorName: ownerUser.name,
+            action: "OPENING_INVENTORY_IMPORTED",
+            objectType: "DATA_IMPORT",
+            objectId: importId,
+            referenceCode: "虚构演示期初库存.xlsx",
+            summary: `通过虚构演示期初库存.xlsx 导入 ${missingInventory.length} 个 SKU 的期初库存`,
+          },
+        });
+      }
+    });
+  }
   const demoCustomers = [
     {
       id: "demo-customer-kh-0003",
@@ -179,7 +244,7 @@ try {
     });
   }
 
-  console.log(`已写入 ${demoAccounts.length} 个虚构演示账号、${demoSkus.length} 个虚构 SKU 和 ${demoCustomers.length} 个虚构客户。`);
+  console.log(`已写入 ${demoAccounts.length} 个虚构演示账号、${demoSkus.length} 个虚构 SKU、${demoCustomers.length} 个虚构客户和 ${demoInventory.length} 组虚构库存。`);
 } finally {
   await prisma.$disconnect();
 }

@@ -21,6 +21,13 @@ enum InventoryMovementType {
   OUTBOUND
 }
 
+enum SalesOrderStatus {
+  DRAFT
+  CONFIRMED
+  OUTBOUND
+  CANCELLED
+}
+
 model User {
   id                   String              @id
   name                 String
@@ -37,6 +44,7 @@ model User {
   dataImports          DataImport[]
   inventoryMovements   InventoryMovement[]
   responsibleCustomers Customer[]          @relation("CustomerResponsibleSales")
+  createdSalesOrders   SalesOrder[]         @relation("SalesOrderCreator")
 
   @@map("user")
 }
@@ -143,6 +151,7 @@ model Sku {
   updatedAt          DateTime            @updatedAt
   inventoryBalance   InventoryBalance?
   inventoryMovements InventoryMovement[]
+  salesOrderItems    SalesOrderItem[]
 
   @@index([name])
   @@index([category])
@@ -201,9 +210,60 @@ model Customer {
   createdAt          DateTime @default(now())
   updatedAt          DateTime @updatedAt
   responsibleSales   User     @relation("CustomerResponsibleSales", fields: [responsibleSalesId], references: [id], onDelete: Restrict)
+  salesOrders         SalesOrder[]
 
   @@index([name])
   @@index([responsibleSalesId])
   @@index([enabled])
   @@map("customer")
+}
+
+model SalesOrder {
+  id                              String           @id
+  salesOrderNumber                String           @unique
+  status                          SalesOrderStatus @default(DRAFT)
+  customerId                      String
+  creatorId                       String
+  customerCodeSnapshot            String
+  customerNameSnapshot            String
+  customerContactNameSnapshot     String
+  customerPhoneSnapshot           String
+  customerAddressSnapshot         String
+  responsibleSalesIdSnapshot      String
+  responsibleSalesNameSnapshot    String
+  paymentTermDaysSnapshot         Int
+  totalAmountFen                  Int
+  createdAt                       DateTime         @default(now())
+  updatedAt                       DateTime         @updatedAt
+  customer                        Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  creator                         User             @relation("SalesOrderCreator", fields: [creatorId], references: [id], onDelete: Restrict)
+  items                           SalesOrderItem[]
+
+  @@index([customerId])
+  @@index([creatorId])
+  @@index([responsibleSalesIdSnapshot])
+  @@index([status, updatedAt])
+  @@index([createdAt])
+  @@map("sales_order")
+}
+
+model SalesOrderItem {
+  id                        String     @id
+  salesOrderId              String
+  skuId                     String
+  position                  Int
+  skuCodeSnapshot           String
+  skuNameSnapshot           String
+  inventoryUnitSnapshot     String
+  referencePriceFenSnapshot Int
+  quantity                  Int
+  transactionPriceFen       Int
+  subtotalFen               Int
+  salesOrder                SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+  sku                       Sku        @relation(fields: [skuId], references: [id], onDelete: Restrict)
+
+  @@unique([salesOrderId, position])
+  @@unique([salesOrderId, skuId])
+  @@index([skuId])
+  @@map("sales_order_item")
 }
