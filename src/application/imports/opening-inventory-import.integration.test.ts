@@ -10,8 +10,11 @@ import { getBusinessAudit } from "../accounts/account-service";
 import { listBusinessAudit } from "../accounts/account-service";
 import type { Actor } from "../auth/resolve-actor";
 import {
+  getOpeningInventorySource,
   listInventory,
+  listInventoryPage,
   listInventoryMovements,
+  listInventoryMovementsPage,
   listSkuAvailabilityForSales,
 } from "../inventory/inventory-service";
 import { PrismaClient } from "../../generated/prisma/client";
@@ -203,6 +206,21 @@ describe("期初库存导入事务", () => {
       }),
     ]);
     await expect(
+      getOpeningInventorySource(prisma, warehouse, imported.importId),
+    ).resolves.toMatchObject({
+      id: imported.importId,
+      fileName: "opening-inventory.xlsx",
+      rowCount: 2,
+      actor: { id: owner.id, name: owner.name },
+      rows: [
+        expect.objectContaining({ skuCode: "WJ-LS-001", quantity: 120 }),
+        expect.objectContaining({ skuCode: "WJ-QP-004", quantity: 60 }),
+      ],
+    });
+    await expect(
+      getOpeningInventorySource(prisma, finance, imported.importId),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" });
+    await expect(
       getBusinessAudit(prisma, owner, imported.auditId),
     ).resolves.toMatchObject({
       action: "OPENING_INVENTORY_IMPORTED",
@@ -287,6 +305,43 @@ describe("期初库存导入事务", () => {
     );
     await expect(listInventoryMovements(prisma, owner, {})).resolves.toEqual([]);
     await expect(listBusinessAudit(prisma, owner, {})).resolves.toEqual([]);
+  });
+
+  it("公式单元格即使带缓存值也只进入错误区", async () => {
+    const workbook = XLSX.utils.book_new();
+    const worksheet = XLSX.utils.aoa_to_sheet([
+      ["SKU 编码", "期初库存数量"],
+      ["WJ-LS-001", 120],
+      ["WJ-QP-004", 60],
+    ]);
+    worksheet.B2 = { t: "n", f: "60+60", v: 120 };
+    XLSX.utils.book_append_sheet(workbook, worksheet, "期初库存导入");
+
+    const preview = await previewOpeningInventoryImport(
+      prisma,
+      owner,
+      {
+        name: "opening-inventory.xlsx",
+        bytes: new Uint8Array(
+          XLSX.write(workbook, { type: "array", bookType: "xlsx" }),
+        ),
+      },
+      tokenContext,
+    );
+
+    expect(preview).toMatchObject({
+      status: "invalid",
+      validRows: [
+        expect.objectContaining({ rowNumber: 3, skuCode: "WJ-QP-004" }),
+      ],
+      errors: [
+        expect.objectContaining({
+          rowNumber: 2,
+          field: "期初库存数量",
+          reason: "不接受公式，请粘贴静态值。",
+        }),
+      ],
+    });
   });
 
   it("重复确认、第二批期初库存和销售库存活动后导入都被拒绝", async () => {
@@ -502,6 +557,26 @@ describe("期初库存导入事务", () => {
     await expect(listInventory(prisma, finance, {})).rejects.toMatchObject({
       code: "FORBIDDEN",
     });
+    await expect(
+      listInventoryPage(
+        prisma,
+        owner,
+        { inventoryWarning: true },
+        { page: 1, pageSize: 1, sort: "skuCode", direction: "asc" },
+      ),
+    ).resolves.toMatchObject({
+      total: 2,
+      totalPages: 2,
+      items: [expect.objectContaining({ skuCode: "WJ-LS-001" })],
+    });
+    await expect(
+      listInventoryMovementsPage(
+        prisma,
+        warehouse,
+        {},
+        { page: 1, pageSize: 1, sort: "occurredAt", direction: "desc" },
+      ),
+    ).resolves.toMatchObject({ total: 3, totalPages: 3, items: [expect.any(Object)] });
 
     const availability = await listSkuAvailabilityForSales(prisma, sales, {
       query: "WJ-LS",

@@ -242,6 +242,7 @@ function parseOpeningInventoryFile(actor: Actor, file: ImportFile) {
     totalRows: worksheet.rows.length,
     rows,
     errors,
+    invalidRowNumbers: new Set(errors.map(({ rowNumber }) => rowNumber)),
     duplicatedCodes: new Set(
       [...occurrences].filter(([, rowNumbers]) => rowNumbers.length > 1).map(([code]) => code),
     ),
@@ -353,6 +354,7 @@ export async function previewOpeningInventoryImport(
     if (
       !row.skuCode ||
       row.quantity === undefined ||
+      parsed.invalidRowNumbers.has(row.rowNumber) ||
       parsed.duplicatedCodes.has(row.skuCode)
     ) {
       continue;

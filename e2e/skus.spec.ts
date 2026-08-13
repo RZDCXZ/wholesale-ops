@@ -123,8 +123,17 @@ test("SKU Server Action 在提交时重新校验当前会话", async ({ page }) 
 
 test("销售可以查看启用 SKU 详情但不能进入编辑页", async ({ page }) => {
   await signIn(page, "sales@example.local", /\/sales-orders$/);
+  await page.goto("/skus");
+  await expect(page.getByRole("columnheader", { name: "可用量" })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "现存量" })).toHaveCount(0);
+  await expect(page.getByRole("columnheader", { name: "预占量" })).toHaveCount(0);
+  await expect(page.getByLabel("仅看库存预警")).toHaveCount(0);
+
   await page.goto("/skus/demo-sku-wj-qp-004");
   await expect(page.getByRole("heading", { name: "基本资料" })).toBeVisible();
+  await expect(page.getByText("可用量", { exact: true })).toBeVisible();
+  await expect(page.getByText("现存量", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("预占量", { exact: true })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "编辑资料" })).toHaveCount(0);
   await expect(page.getByRole("link", { name: "查看完整流水" })).toHaveCount(0);
 

@@ -2,9 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
+import { authorizeCapability } from "@/application/auth/access-policy";
+import { listInventoryMovements } from "@/application/inventory/inventory-service";
 import { getSku, SkuServiceError } from "@/application/skus/sku-service";
 import { SkuRecordActions } from "@/components/sku-record-actions";
 import { prisma } from "@/lib/db";
+import { formatQuantity, formatSignedQuantity } from "@/lib/format-quantity";
 import { getPageActor } from "@/lib/server-authorization";
 
 export const metadata: Metadata = { title: "SKU 详情" };
@@ -41,6 +44,10 @@ export default async function SkuDetailPage({
   }
 
   const canManage = actor.roles.includes("OWNER");
+  const canViewInventory = authorizeCapability(actor, "INVENTORY_VIEW").kind === "authorized";
+  const recentMovements = canViewInventory
+    ? await listInventoryMovements(prisma, actor, { skuId, limit: 5 })
+    : [];
   const noticeValue = first((await searchParams).notice);
   const notice =
     noticeValue === "created"
@@ -57,8 +64,13 @@ export default async function SkuDetailPage({
     ["分类", sku.category],
     ["库存单位", sku.inventoryUnit],
     ["参考售价", formatMoney(sku.referencePriceFen)],
-    ["预警值", `${sku.warningThreshold} ${sku.inventoryUnit}`],
+    ...(canViewInventory
+      ? [["预警值", `${formatQuantity(sku.warningThreshold)} ${sku.inventoryUnit}`]]
+      : []),
   ];
+  const quantities = canViewInventory
+    ? [["现存量", sku.onHandQuantity], ["预占量", sku.reservedQuantity], ["可用量", sku.availableQuantity]]
+    : [["可用量", sku.availableQuantity]];
 
   return (
     <div className="mx-auto max-w-5xl">
@@ -89,16 +101,17 @@ export default async function SkuDetailPage({
         </dl>
       </section>
 
-      <section className="mt-5 grid grid-cols-3 overflow-hidden rounded-lg border border-[#e4e7ec] bg-white max-sm:grid-cols-1 max-sm:divide-x-0 max-sm:divide-y divide-x divide-[#e4e7ec]">
-        {[["现存量", sku.onHandQuantity], ["预占量", sku.reservedQuantity], ["可用量", sku.availableQuantity]].map(([label, value]) => <div key={String(label)} className="p-5"><span className="text-xs font-semibold text-[#667085]">{label}</span><strong className="mt-2 block text-2xl tabular-nums">{value} <small className="text-sm font-medium text-[#667085]">{sku.inventoryUnit}</small></strong></div>)}
+      <section className={`${canViewInventory ? "grid-cols-3" : "grid-cols-1"} mt-5 grid overflow-hidden rounded-lg border border-[#e4e7ec] bg-white max-sm:grid-cols-1 max-sm:divide-x-0 max-sm:divide-y divide-x divide-[#e4e7ec]`}>
+        {quantities.map(([label, value]) => <div key={String(label)} className="p-5"><span className="text-xs font-semibold text-[#667085]">{label}</span><strong className="mt-2 block text-2xl tabular-nums">{formatQuantity(Number(value))} <small className="text-sm font-medium text-[#667085]">{sku.inventoryUnit}</small></strong></div>)}
       </section>
 
-      <section id="inventory-ledger" className="mt-5 rounded-lg border border-[#e4e7ec] bg-white p-5">
+      {canViewInventory ? <section id="inventory-ledger" className="mt-5 rounded-lg border border-[#e4e7ec] bg-white p-5">
         <div className="flex items-start justify-between gap-4 max-sm:grid">
-          <div><h2 className="text-base font-semibold">最近库存流水</h2><p className="mt-2 text-[13px] leading-6 text-[#667085]">尚无库存活动。期初库存与后续销售库存活动接入后，将在这里展示可追溯流水。</p></div>
-          {canManage ? <Link href={`/inventory/ledger?skuId=${encodeURIComponent(sku.id)}`} className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-[7px] border border-[#d0d5dd] px-4 text-sm font-semibold text-[#344054] hover:bg-[#f9fafb]">查看完整流水</Link> : null}
+          <div><h2 className="text-base font-semibold">最近库存流水</h2><p className="mt-1 text-[13px] leading-6 text-[#667085]">最近 5 条只追加库存活动。</p></div>
+          <Link href={`/inventory/ledger?skuId=${encodeURIComponent(sku.id)}`} className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-[7px] border border-[#d0d5dd] px-4 text-sm font-semibold text-[#344054] hover:bg-[#f9fafb]">查看完整流水</Link>
         </div>
-      </section>
+        {recentMovements.length === 0 ? <p className="mt-4 rounded-lg bg-[#f7f9fb] p-4 text-[13px] text-[#667085]">尚无库存活动。</p> : <div className="mt-4 grid divide-y divide-[#e4e7ec] border-y border-[#e4e7ec]">{recentMovements.map((movement) => <div key={movement.id} className="grid gap-2 py-3 text-[13px] sm:grid-cols-[1fr_auto_auto] sm:items-center"><div><strong>{movement.movementType === "OPENING" ? "期初库存" : movement.movementType === "RESERVATION" ? "建立预占" : movement.movementType === "RELEASE" ? "释放预占" : "出库"}</strong><span className="ml-2 text-[#667085]">{movement.relatedReference ?? movement.relatedId}</span></div><span className="tabular-nums text-[#475467]">现存 {formatSignedQuantity(movement.onHandDelta)} · 预占 {formatSignedQuantity(movement.reservedDelta)}</span><span className="font-semibold tabular-nums">可用 {formatQuantity(movement.availableAfter)}</span></div>)}</div>}
+      </section> : null}
 
       {canManage ? (
         <section className="mt-5 flex items-center justify-between gap-4 rounded-lg border border-[#edb1b1] bg-white p-5 max-sm:grid">

@@ -3,12 +3,14 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import { authorizeCapability } from "@/application/auth/access-policy";
 import {
   listSkusPage,
   type SkuSortField,
 } from "@/application/skus/sku-service";
 import { SkuTableRow } from "@/components/sku-table-row";
 import { prisma } from "@/lib/db";
+import { formatQuantity } from "@/lib/format-quantity";
 import { getPageActor } from "@/lib/server-authorization";
 
 export const metadata: Metadata = { title: "SKU" };
@@ -101,12 +103,14 @@ export default async function SkusPage({
 }) {
   const actor = await getPageActor("SKUS_VIEW");
   const parameters = await searchParams;
+  const canManage = actor.roles.includes("OWNER");
+  const canViewInventory = authorizeCapability(actor, "INVENTORY_VIEW").kind === "authorized";
   const query = first(parameters.q).trim();
   const category = first(parameters.category).trim();
   const statusValue = first(parameters.status);
   const status = ["enabled", "disabled"].includes(statusValue) ? statusValue : "";
   const enabled = status === "enabled" ? true : status === "disabled" ? false : undefined;
-  const warning = first(parameters.warning) === "1";
+  const warning = canViewInventory && first(parameters.warning) === "1";
   const sortValue = first(parameters.sort) as SkuSortField;
   const sort = sortFields.has(sortValue) ? sortValue : "updatedAt";
   const direction: Direction = first(parameters.direction) === "asc" ? "asc" : "desc";
@@ -125,7 +129,6 @@ export default async function SkusPage({
     redirect(skuHref({ ...listState, page: skuPage.totalPages }));
   }
 
-  const canManage = actor.roles.includes("OWNER");
   const noticeValue = first(parameters.notice);
   const notice = noticeValue === "deleted" ? "SKU 已删除，删除动作已写入业务审计。" : undefined;
   const filtersActive = Boolean(query || category || status || warning);
@@ -150,8 +153,8 @@ export default async function SkusPage({
           <label className={labelClass}><span>分类</span><input name="category" defaultValue={category} placeholder="例如：紧固件" className={controlClass} /></label>
           <label className={labelClass}><span>启用状态</span><select name="status" defaultValue={status} className={controlClass}><option value="">全部状态</option><option value="enabled">启用</option>{canManage ? <option value="disabled">停用</option> : null}</select></label>
           <label className={labelClass}><span>每页条数</span><select name="size" defaultValue={String(pageSize)} className={controlClass}><option value="20">20 条</option><option value="50">50 条</option><option value="100">100 条</option></select></label>
-          <label className="flex min-h-11 items-center gap-2 rounded-[7px] border border-[#d0d5dd] px-3 text-[13px] font-semibold text-[#344054]"><input type="checkbox" name="warning" value="1" defaultChecked={warning} className="size-4 accent-[#2563eb]" />仅看库存预警</label>
-          <div className="flex gap-2 xl:col-span-3 xl:justify-end"><button type="submit" className="min-h-11 rounded-[7px] border border-[#d0d5dd] px-4 text-[13px] font-semibold text-[#344054]">筛选</button><Link href="/skus" className="inline-flex min-h-11 items-center justify-center rounded-[7px] px-4 text-[13px] font-semibold text-[#475467] hover:bg-[#f2f4f7]">清除</Link></div>
+          {canViewInventory ? <label className="flex min-h-11 items-center gap-2 rounded-[7px] border border-[#d0d5dd] px-3 text-[13px] font-semibold text-[#344054]"><input type="checkbox" name="warning" value="1" defaultChecked={warning} className="size-4 accent-[#2563eb]" />仅看库存预警</label> : null}
+          <div className={`flex gap-2 xl:justify-end ${canViewInventory ? "xl:col-span-3" : "xl:col-span-4"}`}><button type="submit" className="min-h-11 rounded-[7px] border border-[#d0d5dd] px-4 text-[13px] font-semibold text-[#344054]">筛选</button><Link href="/skus" className="inline-flex min-h-11 items-center justify-center rounded-[7px] px-4 text-[13px] font-semibold text-[#475467] hover:bg-[#f2f4f7]">清除</Link></div>
         </form>
 
         {skuPage.items.length === 0 ? (
@@ -160,17 +163,17 @@ export default async function SkusPage({
           <>
             <div className="hidden overflow-x-auto md:block">
               <table className="w-full min-w-[1120px] border-collapse text-left text-[13px]">
-                <thead className="bg-[#f8fafc] text-[#475467]"><tr><SortHeading field="skuCode" label="SKU 编码" state={listState} /><SortHeading field="name" label="名称" state={listState} /><SortHeading field="category" label="分类" state={listState} /><th className="border-b border-[#e4e7ec] px-4 py-3 font-semibold whitespace-nowrap">库存单位</th><SortHeading field="referencePrice" label="参考售价" state={listState} />{["现存量", "预占量", "可用量"].map((heading) => <th key={heading} className="border-b border-[#e4e7ec] px-4 py-3 font-semibold whitespace-nowrap">{heading}</th>)}<SortHeading field="warningThreshold" label="预警值" state={listState} /><th className="border-b border-[#e4e7ec] px-4 py-3 font-semibold whitespace-nowrap">状态</th><th className="border-b border-[#e4e7ec] px-4 py-3 font-semibold"><span className="sr-only">操作</span></th></tr></thead>
+                <thead className="bg-[#f8fafc] text-[#475467]"><tr><SortHeading field="skuCode" label="SKU 编码" state={listState} /><SortHeading field="name" label="名称" state={listState} /><SortHeading field="category" label="分类" state={listState} /><th className="border-b border-[#e4e7ec] px-4 py-3 font-semibold whitespace-nowrap">库存单位</th><SortHeading field="referencePrice" label="参考售价" state={listState} />{canViewInventory ? <><th className="border-b border-[#e4e7ec] px-4 py-3 font-semibold whitespace-nowrap">现存量</th><th className="border-b border-[#e4e7ec] px-4 py-3 font-semibold whitespace-nowrap">预占量</th></> : null}<th className="border-b border-[#e4e7ec] px-4 py-3 font-semibold whitespace-nowrap">可用量</th>{canViewInventory ? <SortHeading field="warningThreshold" label="预警值" state={listState} /> : null}<th className="border-b border-[#e4e7ec] px-4 py-3 font-semibold whitespace-nowrap">状态</th><th className="border-b border-[#e4e7ec] px-4 py-3 font-semibold"><span className="sr-only">操作</span></th></tr></thead>
                 <tbody>{skuPage.items.map((sku) => {
                   const href = `/skus/${sku.id}`;
                   const inventoryWarning = sku.enabled && sku.availableQuantity <= sku.warningThreshold;
-                  return <SkuTableRow key={sku.id} href={href}><td className="px-4 py-3 font-mono text-xs"><Link href={href} className="font-semibold text-[#1d4ed8]">{sku.skuCode}</Link></td><td className="px-4 py-3 font-semibold">{sku.name}</td><td className="px-4 py-3 text-[#475467]">{sku.category}</td><td className="px-4 py-3">{sku.inventoryUnit}</td><td className="px-4 py-3 text-right tabular-nums">{formatMoney(sku.referencePriceFen)}</td><td className="px-4 py-3 text-right tabular-nums">{sku.onHandQuantity}</td><td className="px-4 py-3 text-right tabular-nums">{sku.reservedQuantity}</td><td className="px-4 py-3 text-right font-semibold tabular-nums">{sku.availableQuantity}</td><td className="px-4 py-3 text-right tabular-nums">{sku.warningThreshold}</td><td className="px-4 py-3"><Status enabled={sku.enabled} warning={inventoryWarning} /></td><td className="px-4 py-3"><Link href={href} className="inline-flex min-h-11 items-center px-2 font-semibold whitespace-nowrap text-[#1d4ed8]">查看详情</Link></td></SkuTableRow>;
+                  return <SkuTableRow key={sku.id} href={href}><td className="px-4 py-3 font-mono text-xs"><Link href={href} className="font-semibold text-[#1d4ed8]">{sku.skuCode}</Link></td><td className="px-4 py-3 font-semibold">{sku.name}</td><td className="px-4 py-3 text-[#475467]">{sku.category}</td><td className="px-4 py-3">{sku.inventoryUnit}</td><td className="px-4 py-3 text-right tabular-nums">{formatMoney(sku.referencePriceFen)}</td>{canViewInventory ? <><td className="px-4 py-3 text-right tabular-nums">{formatQuantity(sku.onHandQuantity)}</td><td className="px-4 py-3 text-right tabular-nums">{formatQuantity(sku.reservedQuantity)}</td></> : null}<td className="px-4 py-3 text-right font-semibold tabular-nums">{formatQuantity(sku.availableQuantity)}</td>{canViewInventory ? <td className="px-4 py-3 text-right tabular-nums">{formatQuantity(sku.warningThreshold)}</td> : null}<td className="px-4 py-3"><Status enabled={sku.enabled} warning={canViewInventory && inventoryWarning} /></td><td className="px-4 py-3"><Link href={href} className="inline-flex min-h-11 items-center px-2 font-semibold whitespace-nowrap text-[#1d4ed8]">查看详情</Link></td></SkuTableRow>;
                 })}</tbody>
               </table>
             </div>
             <div className="grid divide-y divide-[#e4e7ec] md:hidden">{skuPage.items.map((sku) => {
               const inventoryWarning = sku.enabled && sku.availableQuantity <= sku.warningThreshold;
-              return <Link key={sku.id} href={`/skus/${sku.id}`} className="block hover:bg-[#fafbfc]"><article className="grid gap-3 p-4 text-[13px]"><div className="flex items-start justify-between gap-3"><div><span className="font-mono text-xs font-semibold text-[#1d4ed8]">{sku.skuCode}</span><h2 className="mt-1 font-semibold">{sku.name}</h2></div><Status enabled={sku.enabled} warning={inventoryWarning} /></div><p className="text-[#667085]">{sku.category} · {sku.inventoryUnit} · {formatMoney(sku.referencePriceFen)}</p><dl className="grid grid-cols-4 gap-2 rounded-lg bg-[#f7f9fb] p-3 text-center"><div><dt className="text-xs text-[#667085]">现存量</dt><dd className="mt-1 font-semibold">{sku.onHandQuantity}</dd></div><div><dt className="text-xs text-[#667085]">预占量</dt><dd className="mt-1 font-semibold">{sku.reservedQuantity}</dd></div><div><dt className="text-xs text-[#667085]">可用量</dt><dd className="mt-1 font-semibold">{sku.availableQuantity}</dd></div><div><dt className="text-xs text-[#667085]">预警值</dt><dd className="mt-1 font-semibold">{sku.warningThreshold}</dd></div></dl></article></Link>;
+              return <Link key={sku.id} href={`/skus/${sku.id}`} className="block hover:bg-[#fafbfc]"><article className="grid gap-3 p-4 text-[13px]"><div className="flex items-start justify-between gap-3"><div><span className="font-mono text-xs font-semibold text-[#1d4ed8]">{sku.skuCode}</span><h2 className="mt-1 font-semibold">{sku.name}</h2></div><Status enabled={sku.enabled} warning={canViewInventory && inventoryWarning} /></div><p className="text-[#667085]">{sku.category} · {sku.inventoryUnit} · {formatMoney(sku.referencePriceFen)}</p><dl className={`${canViewInventory ? "grid-cols-4" : "grid-cols-1"} grid gap-2 rounded-lg bg-[#f7f9fb] p-3 text-center`}>{canViewInventory ? <><div><dt className="text-xs text-[#667085]">现存量</dt><dd className="mt-1 font-semibold">{formatQuantity(sku.onHandQuantity)}</dd></div><div><dt className="text-xs text-[#667085]">预占量</dt><dd className="mt-1 font-semibold">{formatQuantity(sku.reservedQuantity)}</dd></div></> : null}<div><dt className="text-xs text-[#667085]">可用量</dt><dd className="mt-1 font-semibold">{formatQuantity(sku.availableQuantity)}</dd></div>{canViewInventory ? <div><dt className="text-xs text-[#667085]">预警值</dt><dd className="mt-1 font-semibold">{formatQuantity(sku.warningThreshold)}</dd></div> : null}</dl></article></Link>;
             })}</div>
           </>
         )}
