@@ -1,8 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { createAppLogger } from "./logger";
 
 describe("createAppLogger", () => {
+  beforeEach(() => {
+    vi.stubEnv("LOG_LEVEL", "info");
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
   it("结构化日志不会输出密码、Cookie、授权头、会话或令牌值", () => {
     let output = "";
     const logger = createAppLogger({
