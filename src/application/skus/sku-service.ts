@@ -208,9 +208,6 @@ function skuWhere(
     AND: [
       { enabled: canManageSkus(actor) ? undefined : true },
       { enabled: filters.enabled },
-      // Ticket 03 exposes zero inventory until the inventory ledger lands. With a
-      // nonnegative threshold, every enabled SKU is therefore currently at warning.
-      { enabled: filters.inventoryWarning ? true : undefined },
     ],
     category: category
       ? { equals: category, mode: "insensitive" }
@@ -243,12 +240,19 @@ function toSkuListItem(sku: {
   enabled: boolean;
   createdAt: Date;
   updatedAt: Date;
+  inventoryBalance?: {
+    onHandQuantity: number;
+    reservedQuantity: number;
+  } | null;
 }): SkuListItem {
+  const { inventoryBalance, ...skuFields } = sku;
+  const onHandQuantity = inventoryBalance?.onHandQuantity ?? 0;
+  const reservedQuantity = inventoryBalance?.reservedQuantity ?? 0;
   return {
-    ...sku,
-    onHandQuantity: 0,
-    reservedQuantity: 0,
-    availableQuantity: 0,
+    ...skuFields,
+    onHandQuantity,
+    reservedQuantity,
+    availableQuantity: onHandQuantity - reservedQuantity,
   };
 }
 
@@ -323,6 +327,7 @@ export async function getSku(
       id: skuId,
       enabled: canManageSkus(actor) ? undefined : true,
     },
+    include: { inventoryBalance: true },
   });
 
   if (!sku) {
@@ -341,7 +346,10 @@ export async function getSkuInventorySummary(
   skuId: string,
 ): Promise<SkuListItem> {
   assertCapability(actor, "INVENTORY_VIEW");
-  const sku = await database.sku.findUnique({ where: { id: skuId } });
+  const sku = await database.sku.findUnique({
+    where: { id: skuId },
+    include: { inventoryBalance: true },
+  });
   if (!sku) {
     throw new SkuServiceError("SKU_NOT_FOUND", "SKU 不存在或不可访问。");
   }
@@ -534,9 +542,16 @@ export async function listSkus(
   const skus = await database.sku.findMany({
     where: skuWhere(actor, filters),
     orderBy: skuOrderBy(),
+    include: { inventoryBalance: true },
   });
 
-  return skus.map(toSkuListItem);
+  const items = skus.map(toSkuListItem);
+  return filters.inventoryWarning
+    ? items.filter(
+        (sku) =>
+          sku.enabled && sku.availableQuantity <= sku.warningThreshold,
+      )
+    : items;
 }
 
 export async function listSkusPage(
@@ -554,6 +569,29 @@ export async function listSkusPage(
   const page = Math.max(1, pagination.page);
   const pageSize = Math.min(100, Math.max(1, pagination.pageSize));
   const where = skuWhere(actor, filters);
+  if (filters.inventoryWarning) {
+    const warningItems = (
+      await database.sku.findMany({
+        where,
+        orderBy: skuOrderBy(pagination.sort, pagination.direction),
+        include: { inventoryBalance: true },
+      })
+    )
+      .map(toSkuListItem)
+      .filter(
+        (sku) =>
+          sku.enabled && sku.availableQuantity <= sku.warningThreshold,
+      );
+    const total = warningItems.length;
+    return {
+      items: warningItems.slice((page - 1) * pageSize, page * pageSize),
+      page,
+      pageSize,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / pageSize)),
+    };
+  }
+
   const [total, skus] = await Promise.all([
     database.sku.count({ where }),
     database.sku.findMany({
@@ -561,6 +599,7 @@ export async function listSkusPage(
       orderBy: skuOrderBy(pagination.sort, pagination.direction),
       skip: (page - 1) * pageSize,
       take: pageSize,
+      include: { inventoryBalance: true },
     }),
   ]);
 

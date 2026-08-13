@@ -24,6 +24,7 @@ const actionOptions = [
   { value: "SKU_DISABLED", label: "停用 SKU" },
   { value: "SKU_DELETED", label: "删除 SKU" },
   { value: "SKU_IMPORTED", label: "导入 SKU" },
+  { value: "OPENING_INVENTORY_IMPORTED", label: "导入期初库存" },
   { value: "CUSTOMER_CREATED", label: "创建客户" },
   { value: "CUSTOMER_UPDATED", label: "编辑客户" },
   { value: "CUSTOMER_RESPONSIBLE_SALES_CHANGED", label: "调整客户负责人" },

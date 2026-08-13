@@ -14,21 +14,29 @@ enum RoleCode {
   FINANCE
 }
 
+enum InventoryMovementType {
+  OPENING
+  RESERVATION
+  RELEASE
+  OUTBOUND
+}
+
 model User {
-  id             String          @id
-  name           String
-  email          String          @unique
-  emailVerified  Boolean         @default(false)
-  image          String?
-  enabled        Boolean         @default(true)
-  createdAt      DateTime        @default(now())
-  updatedAt      DateTime        @updatedAt
-  sessions       Session[]
-  accounts       Account[]
-  roles          UserRole[]
-  businessAudits BusinessAudit[]
-  dataImports    DataImport[]
-  responsibleCustomers Customer[] @relation("CustomerResponsibleSales")
+  id                   String              @id
+  name                 String
+  email                String              @unique
+  emailVerified        Boolean             @default(false)
+  image                String?
+  enabled              Boolean             @default(true)
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  sessions             Session[]
+  accounts             Account[]
+  roles                UserRole[]
+  businessAudits       BusinessAudit[]
+  dataImports          DataImport[]
+  inventoryMovements   InventoryMovement[]
+  responsibleCustomers Customer[]          @relation("CustomerResponsibleSales")
 
   @@map("user")
 }
@@ -108,13 +116,14 @@ model BusinessAudit {
 }
 
 model DataImport {
-  id          String   @id
-  importType  String
-  fileName    String
-  rowCount    Int
-  actorId     String
-  confirmedAt DateTime @default(now())
-  actor       User     @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  id                 String              @id
+  importType         String
+  fileName           String
+  rowCount           Int
+  actorId            String
+  confirmedAt        DateTime            @default(now())
+  actor              User                @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  inventoryMovements InventoryMovement[]
 
   @@index([actorId])
   @@index([confirmedAt])
@@ -122,16 +131,18 @@ model DataImport {
 }
 
 model Sku {
-  id                  String   @id
-  skuCode             String   @unique
-  name                String
-  category            String
-  inventoryUnit       String
-  referencePriceFen   Int
-  warningThreshold    Int
-  enabled             Boolean  @default(true)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  id                 String              @id
+  skuCode            String              @unique
+  name               String
+  category           String
+  inventoryUnit      String
+  referencePriceFen  Int
+  warningThreshold   Int
+  enabled            Boolean             @default(true)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  inventoryBalance   InventoryBalance?
+  inventoryMovements InventoryMovement[]
 
   @@index([name])
   @@index([category])
@@ -139,18 +150,56 @@ model Sku {
   @@map("sku")
 }
 
+model InventoryBalance {
+  skuId            String   @id
+  onHandQuantity   Int      @default(0)
+  reservedQuantity Int      @default(0)
+  updatedAt        DateTime @updatedAt
+  sku              Sku      @relation(fields: [skuId], references: [id], onDelete: Restrict)
+
+  @@map("inventory_balance")
+}
+
+model InventoryMovement {
+  id               String                @id
+  skuId            String
+  movementType     InventoryMovementType
+  onHandDelta      Int
+  reservedDelta    Int
+  onHandAfter      Int
+  reservedAfter    Int
+  occurredAt       DateTime              @default(now())
+  relatedType      String
+  relatedId        String
+  relatedReference String?
+  dataImportId     String?
+  actorId          String
+  actorName        String
+  sku              Sku                   @relation(fields: [skuId], references: [id], onDelete: Restrict)
+  dataImport       DataImport?           @relation(fields: [dataImportId], references: [id], onDelete: Restrict)
+  actor            User                  @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([skuId, occurredAt])
+  @@index([movementType, occurredAt])
+  @@index([occurredAt])
+  @@index([relatedType, relatedId])
+  @@index([dataImportId])
+  @@index([actorId])
+  @@map("inventory_movement")
+}
+
 model Customer {
   id                 String   @id
   customerCode       String   @unique
   name               String
   contactName        String
-  phone               String
-  address             String
+  phone              String
+  address            String
   responsibleSalesId String
   paymentTermDays    Int
-  enabled             Boolean  @default(true)
-  createdAt           DateTime @default(now())
-  updatedAt           DateTime @updatedAt
+  enabled            Boolean  @default(true)
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
   responsibleSales   User     @relation("CustomerResponsibleSales", fields: [responsibleSalesId], references: [id], onDelete: Restrict)
 
   @@index([name])

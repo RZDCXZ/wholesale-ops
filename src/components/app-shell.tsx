@@ -3,6 +3,7 @@
 import {
   IconBox,
   IconChartBar,
+  IconBuildingWarehouse,
   IconChevronDown,
   IconChevronRight,
   IconFileInvoice,
@@ -33,6 +34,7 @@ const navigationIcons = {
   "/skus": IconBox,
   "/customers": IconUsers,
   "/warehouse/outbound": IconPackageExport,
+  "/inventory": IconBuildingWarehouse,
   "/receivables": IconReceipt2,
   "/imports": IconUpload,
   "/audit": IconShieldCheck,

@@ -53,6 +53,12 @@ const navigation: NavigationItem[] = [
     href: "/warehouse/outbound",
   },
   {
+    capability: "INVENTORY_VIEW",
+    group: "仓库",
+    label: "库存",
+    href: "/inventory",
+  },
+  {
     capability: "RECEIVABLES_VIEW",
     group: "财务",
     label: "应收",

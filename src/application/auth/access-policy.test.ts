@@ -78,6 +78,7 @@ describe("角色权限", () => {
       "/skus",
       "/customers",
       "/warehouse/outbound",
+      "/inventory",
     ]);
   });
 });

@@ -1,12 +1,16 @@
 import type { Metadata } from "next";
 
+import { getOpeningInventoryImportAvailability } from "@/application/imports/opening-inventory-import";
 import { ImportWorkbench } from "@/components/import-workbench";
+import { prisma } from "@/lib/db";
 import { getPageActor } from "@/lib/server-authorization";
 
 export const metadata: Metadata = { title: "导入工作台" };
 
 export default async function ImportsPage() {
-  await getPageActor("IMPORTS_MANAGE");
+  const actor = await getPageActor("IMPORTS_MANAGE");
+  const openingInventoryAvailability =
+    await getOpeningInventoryImportAvailability(prisma, actor);
 
   return (
     <>
@@ -18,7 +22,9 @@ export default async function ImportsPage() {
           SKU、客户与期初库存使用固定 .xlsx 模板
         </p>
       </header>
-      <ImportWorkbench />
+      <ImportWorkbench
+        openingInventoryAvailability={openingInventoryAvailability}
+      />
     </>
   );
 }

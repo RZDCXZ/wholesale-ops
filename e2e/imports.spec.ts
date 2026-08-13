@@ -247,7 +247,7 @@ test("销售不能打开或调用任何导入入口", async ({ page }) => {
   await expect(page).toHaveURL(/\/forbidden$/);
 
   const statuses = await page.evaluate(async () => {
-    const [skuTemplate, skuPreview, skuConfirm, customerTemplate, customerPreview, customerConfirm] = await Promise.all([
+    const [skuTemplate, skuPreview, skuConfirm, customerTemplate, customerPreview, customerConfirm, openingTemplate, openingPreview, openingConfirm] = await Promise.all([
       fetch("/api/imports/sku/template"),
       fetch("/api/imports/sku/preview", { method: "POST" }),
       fetch("/api/imports/sku/confirm", {
@@ -262,6 +262,13 @@ test("销售不能打开或调用任何导入入口", async ({ page }) => {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ previewToken: "invalid" }),
       }),
+      fetch("/api/imports/opening-inventory/template"),
+      fetch("/api/imports/opening-inventory/preview", { method: "POST" }),
+      fetch("/api/imports/opening-inventory/confirm", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ previewToken: "invalid" }),
+      }),
     ]);
     return [
       skuTemplate.status,
@@ -270,9 +277,12 @@ test("销售不能打开或调用任何导入入口", async ({ page }) => {
       customerTemplate.status,
       customerPreview.status,
       customerConfirm.status,
+      openingTemplate.status,
+      openingPreview.status,
+      openingConfirm.status,
     ];
   });
-  expect(statuses).toEqual([403, 403, 403, 403, 403, 403]);
+  expect(statuses).toEqual([403, 403, 403, 403, 403, 403, 403, 403, 403]);
 });
 
 test("确认请求暂时失败时保留预览并允许直接重试", async ({ page }) => {
