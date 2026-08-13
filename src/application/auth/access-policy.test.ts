@@ -16,13 +16,14 @@ const capabilitiesByRole: Record<Role, Capability[]> = {
     "SALES_ORDERS_VIEW",
     "SKUS_VIEW",
     "SKUS_MANAGE",
+    "INVENTORY_VIEW",
     "OUTBOUND_VIEW",
     "RECEIVABLES_VIEW",
     "ACCOUNTS_MANAGE",
     "AUDIT_VIEW",
   ],
   SALES: ["SALES_ORDERS_VIEW", "SKUS_VIEW"],
-  WAREHOUSE: ["OUTBOUND_VIEW"],
+  WAREHOUSE: ["OUTBOUND_VIEW", "INVENTORY_VIEW"],
   FINANCE: ["RECEIVABLES_VIEW"],
 };
 

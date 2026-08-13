@@ -5,6 +5,7 @@ export type Capability =
   | "SALES_ORDERS_VIEW"
   | "SKUS_VIEW"
   | "SKUS_MANAGE"
+  | "INVENTORY_VIEW"
   | "OUTBOUND_VIEW"
   | "RECEIVABLES_VIEW"
   | "AUDIT_VIEW"
@@ -66,9 +67,10 @@ const capabilitiesByRole: Record<Role, ReadonlySet<Capability>> = {
   OWNER: new Set([
     ...navigation.map(({ capability }) => capability),
     "SKUS_MANAGE",
+    "INVENTORY_VIEW",
   ]),
   SALES: new Set(["SALES_ORDERS_VIEW", "SKUS_VIEW"]),
-  WAREHOUSE: new Set(["OUTBOUND_VIEW"]),
+  WAREHOUSE: new Set(["OUTBOUND_VIEW", "INVENTORY_VIEW"]),
   FINANCE: new Set(["RECEIVABLES_VIEW"]),
 };
 

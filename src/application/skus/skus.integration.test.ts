@@ -11,6 +11,7 @@ import {
   deleteSku,
   disableSku,
   getSku,
+  getSkuInventorySummary,
   listSkus,
   listSkusPage,
   SkuServiceError,
@@ -214,10 +215,8 @@ describe("SKU 资料管理", () => {
         skuId: sku.id,
         name: "304 不锈钢六角螺栓 M8×30",
         category: "不锈钢紧固件",
-        inventoryUnit: "盒",
         referencePrice: "50.00",
         warningThreshold: 18,
-        enabled: true,
       }),
     ).resolves.toMatchObject({
       skuCode: "WJ-LS-001",
@@ -236,8 +235,42 @@ describe("SKU 资料管理", () => {
       }),
     ).resolves.toEqual([
       expect.objectContaining({ action: "SKU_CREATED" }),
-      expect.objectContaining({ action: "SKU_UPDATED" }),
+      expect.objectContaining({
+        action: "SKU_UPDATED",
+        summary:
+          "名称由「六角螺栓」调整为「304 不锈钢六角螺栓 M8×30」；分类由「紧固件」调整为「不锈钢紧固件」；参考售价由 ¥48.50 调整为 ¥50.00；预警值由 20 调整为 18",
+      }),
     ]);
+  });
+
+  it("服务端拒绝通过普通编辑修改库存单位或启用状态", async () => {
+    const sku = await createSku(prisma, owner, {
+      skuCode: "WJ-IMMUTABLE-UNIT",
+      name: "固定单位测试",
+      category: "测试",
+      inventoryUnit: "盒",
+      referencePrice: "10.00",
+      warningThreshold: 1,
+      enabled: true,
+    });
+    const editable = {
+      skuId: sku.id,
+      name: sku.name,
+      category: sku.category,
+      referencePrice: "10.00",
+      warningThreshold: 1,
+    };
+
+    const tamperedUnit = { ...editable, inventoryUnit: "片" };
+    const tamperedStatus = { ...editable, enabled: false };
+    await expect(updateSku(prisma, owner, tamperedUnit)).rejects.toMatchObject({
+      code: "INVENTORY_UNIT_IMMUTABLE",
+      message: "库存单位创建后不能修改。",
+    } satisfies Partial<SkuServiceError>);
+    await expect(updateSku(prisma, owner, tamperedStatus)).rejects.toMatchObject({
+      code: "SKU_STATUS_REQUIRES_ACTION",
+      message: "请使用专门的停用操作变更 SKU 状态。",
+    } satisfies Partial<SkuServiceError>);
   });
 
   it("老板和销售可组合筛选 SKU，销售目录始终只返回启用 SKU", async () => {
@@ -281,8 +314,28 @@ describe("SKU 资料管理", () => {
       listSkus(prisma, sales, { enabled: false }),
     ).resolves.toEqual([]);
     await expect(
+      listSkus(prisma, owner, { inventoryWarning: true }),
+    ).resolves.toEqual([
+      expect.objectContaining({ skuCode: "WJ-QP-004", enabled: true }),
+      expect.objectContaining({ skuCode: "WJ-LS-001", enabled: true }),
+    ]);
+    await expect(
       listSkusPage(prisma, owner, { category: "紧固件" }, { page: 2, pageSize: 1 }),
     ).resolves.toMatchObject({ page: 2, pageSize: 1, total: 2, totalPages: 2 });
+    await expect(
+      listSkusPage(
+        prisma,
+        owner,
+        {},
+        { page: 1, pageSize: 20, sort: "skuCode", direction: "asc" },
+      ),
+    ).resolves.toMatchObject({
+      items: [
+        expect.objectContaining({ skuCode: "WJ-LS-001" }),
+        expect.objectContaining({ skuCode: "WJ-LS-002" }),
+        expect.objectContaining({ skuCode: "WJ-QP-004" }),
+      ],
+    });
   });
 
   it.each([sales, warehouse, finance])(
@@ -314,6 +367,30 @@ describe("SKU 资料管理", () => {
       } satisfies Partial<SkuServiceError>);
     },
   );
+
+  it("库存流水入口只向老板和仓库提供必要 SKU 摘要", async () => {
+    const sku = await createSku(prisma, owner, {
+      skuCode: "WJ-LEDGER-001",
+      name: "流水筛选测试 SKU",
+      category: "测试",
+      inventoryUnit: "个",
+      referencePrice: "12.00",
+      warningThreshold: 2,
+      enabled: false,
+    });
+
+    await expect(
+      getSkuInventorySummary(prisma, warehouse, sku.id),
+    ).resolves.toMatchObject({
+      skuCode: "WJ-LEDGER-001",
+      onHandQuantity: 0,
+      reservedQuantity: 0,
+      availableQuantity: 0,
+    });
+    await expect(
+      getSkuInventorySummary(prisma, finance, sku.id),
+    ).rejects.toMatchObject({ code: "FORBIDDEN" } satisfies Partial<SkuServiceError>);
+  });
 
   it("老板停用 SKU 后销售目录不再返回它，并留下停用审计", async () => {
     const sku = await createSku(prisma, owner, {
@@ -389,6 +466,10 @@ describe("SKU 资料管理", () => {
       VALUES ('reference-1', ${sku.id})
     `;
 
+    await expect(getSku(prisma, owner, sku.id)).resolves.toMatchObject({
+      hasBusinessReferences: true,
+    });
+
     await expect(
       deleteSku(prisma, owner, { skuId: sku.id, confirmed: true }),
     ).rejects.toMatchObject({
@@ -446,10 +527,8 @@ describe("SKU 资料管理", () => {
         skuId: sku.id,
         name: "不应保存的新名称",
         category: sku.category,
-        inventoryUnit: sku.inventoryUnit,
         referencePrice: "20.00",
         warningThreshold: 2,
-        enabled: true,
       }),
     ).rejects.toThrow("forced sku audit failure");
     await expect(

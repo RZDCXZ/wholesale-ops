@@ -40,7 +40,9 @@ const skuFieldsSchema = z.object({
 const createSchema = skuFieldsSchema.extend({
   skuCode: z.string().trim().min(1, "请输入 SKU 编码。").max(64, "SKU 编码不能超过 64 个字符。"),
 });
-const updateSchema = skuFieldsSchema.extend({ skuId: z.string().min(1) });
+const updateSchema = skuFieldsSchema
+  .omit({ inventoryUnit: true, enabled: true })
+  .extend({ skuId: z.string().min(1) });
 const confirmedSchema = z.object({
   skuId: z.string().min(1),
   confirmed: z.literal("yes", { error: "请先确认操作影响。" }),
@@ -94,6 +96,11 @@ function skuFields(formData: FormData) {
   };
 }
 
+function mutableSkuFields(formData: FormData) {
+  const { name, category, referencePrice, warningThreshold } = skuFields(formData);
+  return { name, category, referencePrice, warningThreshold };
+}
+
 export async function createSkuAction(
   _previousState: SkuActionState,
   formData: FormData,
@@ -124,7 +131,7 @@ export async function updateSkuAction(
 ): Promise<SkuActionState> {
   const parsed = updateSchema.safeParse({
     skuId: formData.get("skuId"),
-    ...skuFields(formData),
+    ...mutableSkuFields(formData),
   });
   if (!parsed.success) return validationState(parsed.error);
 

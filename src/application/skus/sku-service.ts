@@ -32,9 +32,9 @@ const createSkuInputSchema = z.object({
   enabled: z.boolean(),
 });
 
-const updateSkuInputSchema = createSkuInputSchema.omit({ skuCode: true }).extend({
-  skuId: z.string().min(1),
-});
+const updateSkuInputSchema = createSkuInputSchema
+  .omit({ skuCode: true, inventoryUnit: true, enabled: true })
+  .extend({ skuId: z.string().min(1) });
 const confirmedSkuInputSchema = z.object({
   skuId: z.string().min(1),
   confirmed: z.literal(true),
@@ -56,7 +56,21 @@ export type SkuListItem = {
   updatedAt: Date;
 };
 
+export type SkuDetail = SkuListItem & { hasBusinessReferences: boolean };
 export type SkuMutationResult = SkuListItem & { auditId: string };
+export type SkuFilters = {
+  query?: string;
+  category?: string;
+  enabled?: boolean;
+  inventoryWarning?: boolean;
+};
+export type SkuSortField =
+  | "skuCode"
+  | "name"
+  | "category"
+  | "referencePrice"
+  | "warningThreshold"
+  | "updatedAt";
 export type SkuListPage = {
   items: SkuListItem[];
   page: number;
@@ -71,6 +85,8 @@ export class SkuServiceError extends Error {
       | "FORBIDDEN"
       | "SKU_CODE_EXISTS"
       | "SKU_CODE_IMMUTABLE"
+      | "INVENTORY_UNIT_IMMUTABLE"
+      | "SKU_STATUS_REQUIRES_ACTION"
       | "SKU_NOT_FOUND"
       | "SKU_REFERENCED"
       | "INVALID_REFERENCE_PRICE"
@@ -129,9 +145,48 @@ function databaseErrorCode(error: unknown): string | undefined {
     : undefined;
 }
 
+function formatReferencePrice(fen: number): string {
+  return `¥${(fen / 100).toFixed(2)}`;
+}
+
+function updateSummary(
+  current: {
+    name: string;
+    category: string;
+    referencePriceFen: number;
+    warningThreshold: number;
+  },
+  updated: {
+    name: string;
+    category: string;
+    referencePriceFen: number;
+    warningThreshold: number;
+  },
+): string {
+  const changes: string[] = [];
+  if (current.name !== updated.name) {
+    changes.push(`名称由「${current.name}」调整为「${updated.name}」`);
+  }
+  if (current.category !== updated.category) {
+    changes.push(`分类由「${current.category}」调整为「${updated.category}」`);
+  }
+  if (current.referencePriceFen !== updated.referencePriceFen) {
+    changes.push(
+      `参考售价由 ${formatReferencePrice(current.referencePriceFen)} 调整为 ${formatReferencePrice(updated.referencePriceFen)}`,
+    );
+  }
+  if (current.warningThreshold !== updated.warningThreshold) {
+    changes.push(
+      `预警值由 ${current.warningThreshold} 调整为 ${updated.warningThreshold}`,
+    );
+  }
+
+  return changes.join("；") || "资料内容未发生变化";
+}
+
 function assertCapability(
   actor: Actor,
-  capability: "SKUS_VIEW" | "SKUS_MANAGE",
+  capability: "SKUS_VIEW" | "SKUS_MANAGE" | "INVENTORY_VIEW",
 ) {
   if (authorizeCapability(actor, capability).kind !== "authorized") {
     throw new SkuServiceError("FORBIDDEN", "没有访问权限。");
@@ -144,7 +199,7 @@ function canManageSkus(actor: Actor): boolean {
 
 function skuWhere(
   actor: Actor,
-  filters: { query?: string; category?: string; enabled?: boolean },
+  filters: SkuFilters,
 ): Prisma.SkuWhereInput {
   const query = filters.query?.trim();
   const category = filters.category?.trim();
@@ -153,6 +208,9 @@ function skuWhere(
     AND: [
       { enabled: canManageSkus(actor) ? undefined : true },
       { enabled: filters.enabled },
+      // Ticket 03 exposes zero inventory until the inventory ledger lands. With a
+      // nonnegative threshold, every enabled SKU is therefore currently at warning.
+      { enabled: filters.inventoryWarning ? true : undefined },
     ],
     category: category
       ? { equals: category, mode: "insensitive" }
@@ -164,6 +222,14 @@ function skuWhere(
         ]
       : undefined,
   };
+}
+
+function skuOrderBy(
+  sort: SkuSortField = "updatedAt",
+  direction: Prisma.SortOrder = "desc",
+): Prisma.SkuOrderByWithRelationInput[] {
+  const field = sort === "referencePrice" ? "referencePriceFen" : sort;
+  return [{ [field]: direction }, { id: "asc" }];
 }
 
 function toSkuListItem(sku: {
@@ -250,7 +316,7 @@ export async function getSku(
   database: PrismaClient,
   actor: Actor,
   skuId: string,
-): Promise<SkuListItem> {
+): Promise<SkuDetail> {
   assertCapability(actor, "SKUS_VIEW");
   const sku = await database.sku.findFirst({
     where: {
@@ -263,7 +329,33 @@ export async function getSku(
     throw new SkuServiceError("SKU_NOT_FOUND", "SKU 不存在或不可访问。");
   }
 
+  return {
+    ...toSkuListItem(sku),
+    hasBusinessReferences: await skuHasBusinessReferences(database, sku.id),
+  };
+}
+
+export async function getSkuInventorySummary(
+  database: PrismaClient,
+  actor: Actor,
+  skuId: string,
+): Promise<SkuListItem> {
+  assertCapability(actor, "INVENTORY_VIEW");
+  const sku = await database.sku.findUnique({ where: { id: skuId } });
+  if (!sku) {
+    throw new SkuServiceError("SKU_NOT_FOUND", "SKU 不存在或不可访问。");
+  }
   return toSkuListItem(sku);
+}
+
+async function skuHasBusinessReferences(
+  database: PrismaClient | Prisma.TransactionClient,
+  skuId: string,
+): Promise<boolean> {
+  const rows = await database.$queryRaw<Array<{ referenced: boolean }>>`
+    SELECT sku_has_business_references(${skuId}) AS referenced
+  `;
+  return rows[0]?.referenced ?? false;
 }
 
 export async function updateSku(
@@ -276,6 +368,18 @@ export async function updateSku(
     throw new SkuServiceError(
       "SKU_CODE_IMMUTABLE",
       "SKU 编码创建后不能修改。",
+    );
+  }
+  if (typeof input === "object" && input !== null && "inventoryUnit" in input) {
+    throw new SkuServiceError(
+      "INVENTORY_UNIT_IMMUTABLE",
+      "库存单位创建后不能修改。",
+    );
+  }
+  if (typeof input === "object" && input !== null && "enabled" in input) {
+    throw new SkuServiceError(
+      "SKU_STATUS_REQUIRES_ACTION",
+      "请使用专门的停用操作变更 SKU 状态。",
     );
   }
   const validation = updateSkuInputSchema.safeParse(input);
@@ -299,10 +403,8 @@ export async function updateSku(
       data: {
         name: parsed.name,
         category: parsed.category,
-        inventoryUnit: parsed.inventoryUnit,
         referencePriceFen: parsed.referencePrice,
         warningThreshold: parsed.warningThreshold,
-        enabled: parsed.enabled,
       },
     });
     await transaction.businessAudit.create({
@@ -314,7 +416,7 @@ export async function updateSku(
         objectType: "SKU",
         objectId: updated.id,
         referenceCode: updated.skuCode,
-        summary: `更新 SKU 资料：${updated.name}`,
+        summary: updateSummary(current, updated),
       },
     });
 
@@ -381,6 +483,12 @@ export async function deleteSku(
       if (!current) {
         throw new SkuServiceError("SKU_NOT_FOUND", "SKU 不存在或不可访问。");
       }
+      if (await skuHasBusinessReferences(transaction, current.id)) {
+        throw new SkuServiceError(
+          "SKU_REFERENCED",
+          "SKU 已被业务记录引用，不能删除；请改为停用。",
+        );
+      }
 
       await transaction.sku.delete({ where: { id: current.id } });
       await transaction.businessAudit.create({
@@ -420,12 +528,12 @@ export async function deleteSku(
 export async function listSkus(
   database: PrismaClient,
   actor: Actor,
-  _filters: { query?: string; category?: string; enabled?: boolean },
+  filters: SkuFilters,
 ): Promise<SkuListItem[]> {
   assertCapability(actor, "SKUS_VIEW");
   const skus = await database.sku.findMany({
-    where: skuWhere(actor, _filters),
-    orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+    where: skuWhere(actor, filters),
+    orderBy: skuOrderBy(),
   });
 
   return skus.map(toSkuListItem);
@@ -434,8 +542,13 @@ export async function listSkus(
 export async function listSkusPage(
   database: PrismaClient,
   actor: Actor,
-  filters: { query?: string; category?: string; enabled?: boolean },
-  pagination: { page: number; pageSize: number },
+  filters: SkuFilters,
+  pagination: {
+    page: number;
+    pageSize: number;
+    sort?: SkuSortField;
+    direction?: Prisma.SortOrder;
+  },
 ): Promise<SkuListPage> {
   assertCapability(actor, "SKUS_VIEW");
   const page = Math.max(1, pagination.page);
@@ -445,7 +558,7 @@ export async function listSkusPage(
     database.sku.count({ where }),
     database.sku.findMany({
       where,
-      orderBy: [{ createdAt: "desc" }, { id: "asc" }],
+      orderBy: skuOrderBy(pagination.sort, pagination.direction),
       skip: (page - 1) * pageSize,
       take: pageSize,
     }),

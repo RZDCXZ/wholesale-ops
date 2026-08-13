@@ -57,11 +57,38 @@ test("老板可以创建、编辑和停用 SKU，销售只看到启用目录", a
     await expect(page.getByText("现存量", { exact: true })).toBeVisible();
     await expect(page.getByText("预占量", { exact: true })).toBeVisible();
     await expect(page.getByText("可用量", { exact: true })).toBeVisible();
-    await expect(page.getByLabel("SKU 编码")).toBeDisabled();
+    await expect(page.getByRole("link", { name: "编辑资料" })).toBeVisible();
+    await expect(page.getByLabel("SKU 编码")).toHaveCount(0);
 
+    await page.getByRole("link", { name: "编辑资料" }).click();
+    await expect(page).toHaveURL(/\/skus\/[^/?]+\/edit$/);
+    await expect(page.getByLabel("SKU 编码")).toBeDisabled();
+    await expect(page.getByLabel("库存单位")).toBeDisabled();
+
+    await page.getByLabel("名称").fill("尚未保存的名称");
+    page.once("dialog", async (dialog) => {
+      expect(dialog.message()).toBe("表单尚未保存，确认离开吗？");
+      await dialog.accept();
+    });
+    await page.getByRole("link", { name: "取消编辑" }).first().click();
+    await expect(page).toHaveURL(/\/skus\/[^/?]+$/);
+
+    await page.getByRole("link", { name: "编辑资料" }).click();
     await page.getByLabel("名称").fill("304 不锈钢六角螺栓 E2E");
     await page.getByRole("button", { name: "保存资料" }).click();
-    await expect(page.getByText("SKU 资料已更新，SKU 编码保持不变。", { exact: true })).toBeVisible();
+    await expect(page.getByText("SKU 资料已更新，SKU 编码和库存单位保持不变。", { exact: true })).toBeVisible();
+
+    await page.goto(`/skus?q=${skuCode}`);
+    await expect(page.getByText("搜索", { exact: true })).toBeVisible();
+    await expect(page.getByText("分类", { exact: true }).first()).toBeVisible();
+    await expect(page.getByLabel("仅看库存预警")).toBeVisible();
+    await page.getByText("304 不锈钢六角螺栓 E2E", { exact: true }).first().click();
+    await expect(page).toHaveURL(/\/skus\/[^/?]+$/);
+
+    await page.getByRole("link", { name: "查看完整流水" }).click();
+    await expect(page).toHaveURL(/\/inventory\/ledger\?skuId=/);
+    await expect(page.getByRole("heading", { name: "该 SKU 暂无库存流水" })).toBeVisible();
+    await page.getByRole("link", { name: "返回 SKU 详情" }).click();
 
     await page.getByRole("button", { name: "停用 SKU" }).click();
     await expect(page.getByRole("dialog", { name: "停用 SKU" })).toBeVisible();
@@ -94,6 +121,17 @@ test("SKU Server Action 在提交时重新校验当前会话", async ({ page }) 
   await expect(page).toHaveURL(/\/skus\/new$/);
 });
 
+test("销售可以查看启用 SKU 详情但不能进入编辑页", async ({ page }) => {
+  await signIn(page, "sales@example.local", /\/sales-orders$/);
+  await page.goto("/skus/demo-sku-wj-qp-004");
+  await expect(page.getByRole("heading", { name: "基本资料" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "编辑资料" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "查看完整流水" })).toHaveCount(0);
+
+  await page.goto("/skus/demo-sku-wj-qp-004/edit");
+  await expect(page).toHaveURL(/\/forbidden$/);
+});
+
 for (const role of ["warehouse", "finance"] as const) {
   test(`${role} 不能直接访问 SKU 目录和维护页`, async ({ page }) => {
     await signIn(
@@ -103,6 +141,13 @@ for (const role of ["warehouse", "finance"] as const) {
     );
     for (const path of ["/skus", "/skus/new"]) {
       await page.goto(path);
+      await expect(page).toHaveURL(/\/forbidden$/);
+    }
+
+    await page.goto("/inventory/ledger?skuId=demo-sku-wj-qp-004");
+    if (role === "warehouse") {
+      await expect(page.getByRole("heading", { name: "库存流水", exact: true })).toBeVisible();
+    } else {
       await expect(page).toHaveURL(/\/forbidden$/);
     }
   });

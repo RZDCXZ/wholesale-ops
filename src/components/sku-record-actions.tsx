@@ -69,14 +69,26 @@ function ConfirmationDialog({
   );
 }
 
-export function SkuRecordActions({ sku }: { sku: { id: string; skuCode: string; name: string; enabled: boolean } }) {
+export function SkuRecordActions({
+  sku,
+}: {
+  sku: {
+    id: string;
+    skuCode: string;
+    name: string;
+    enabled: boolean;
+    canDelete: boolean;
+  };
+}) {
   const [action, setAction] = useState<"disable" | "delete">();
 
   return (
     <>
       <div className="flex flex-wrap gap-2">
         {sku.enabled ? <Button variant="danger" onClick={() => setAction("disable")}>停用 SKU</Button> : null}
-        <Button variant="ghost" className="text-[#c62828] hover:bg-[#fff0f0]" onClick={() => setAction("delete")}>删除 SKU</Button>
+        {sku.canDelete ? (
+          <Button variant="ghost" className="text-[#c62828] hover:bg-[#fff0f0]" onClick={() => setAction("delete")}>删除 SKU</Button>
+        ) : null}
       </div>
       {action ? <ConfirmationDialog action={action} sku={sku} onClose={() => setAction(undefined)} /> : null}
     </>
