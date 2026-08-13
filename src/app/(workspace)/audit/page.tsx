@@ -34,6 +34,7 @@ const actionOptions = [
   { value: "SALES_ORDER_DRAFT_UPDATED", label: "编辑销售单草稿" },
   { value: "SALES_ORDER_DRAFT_DELETED", label: "删除销售单草稿" },
   { value: "SALES_ORDER_CONFIRMED", label: "确认销售单" },
+  { value: "SALES_ORDER_CANCELLED", label: "取消销售单" },
 ] as const;
 const objectOptions = [
   { value: "ACCOUNT", label: "账号" },

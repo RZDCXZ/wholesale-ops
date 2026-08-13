@@ -209,6 +209,7 @@ export function SalesOrderInventoryImpacts({
   quantity,
   initialImpact,
   showDeltas = false,
+  direction = "reserve",
 }: {
   skuId: string;
   quantity: number;
@@ -221,6 +222,7 @@ export function SalesOrderInventoryImpacts({
     availableAfter: number;
   };
   showDeltas?: boolean;
+  direction?: "reserve" | "release";
 }) {
   const { state } = useConfirmation();
   const latest = state.inventoryShortages?.find(
@@ -236,6 +238,7 @@ export function SalesOrderInventoryImpacts({
   const availableAfter = latest
     ? latest.availableQuantity - quantity
     : initialImpact.availableAfter;
+  const reservedDelta = direction === "release" ? -quantity : quantity;
 
   return (
     <>
@@ -252,7 +255,7 @@ export function SalesOrderInventoryImpacts({
           {reservedBefore} → {reservedAfter}{" "}
           {showDeltas ? (
             <small className="text-[#027a48]">
-              {formatSignedQuantity(quantity)}
+              {formatSignedQuantity(reservedDelta)}
             </small>
           ) : null}
         </strong>
@@ -267,7 +270,9 @@ export function SalesOrderInventoryImpacts({
         <span className="block text-xs">可用量</span>
         <strong className="mt-1 block tabular-nums">
           {availableBefore} → {availableAfter}{" "}
-          {showDeltas ? <small>{formatSignedQuantity(-quantity)}</small> : null}
+          {showDeltas ? (
+            <small>{formatSignedQuantity(-reservedDelta)}</small>
+          ) : null}
         </strong>
       </div>
     </>

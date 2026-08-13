@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import {
+  cancelSalesOrder,
   confirmSalesOrder,
   createSalesOrderDraft,
   deleteSalesOrderDraft,
@@ -171,4 +172,29 @@ export async function confirmSalesOrderAction(
   revalidatePath("/skus");
   revalidatePath("/audit");
   redirect(`/sales-orders/${encodeURIComponent(salesOrderId)}?notice=confirmed`);
+}
+
+export async function cancelSalesOrderAction(
+  _previousState: SalesOrderActionState,
+  formData: FormData,
+): Promise<SalesOrderActionState> {
+  const salesOrderId = String(formData.get("salesOrderId") ?? "").trim();
+  const reason = String(formData.get("reason") ?? "");
+  if (!salesOrderId) {
+    return { status: "error", message: "销售单不存在或不可取消。" };
+  }
+
+  try {
+    const actor = await getActionActor();
+    await cancelSalesOrder(prisma, actor, { salesOrderId, reason });
+  } catch (error) {
+    return serviceErrorState(error);
+  }
+  revalidatePath("/sales-orders");
+  revalidatePath(`/sales-orders/${salesOrderId}`);
+  revalidatePath("/inventory");
+  revalidatePath("/inventory/ledger");
+  revalidatePath("/skus");
+  revalidatePath("/audit");
+  redirect(`/sales-orders/${encodeURIComponent(salesOrderId)}?notice=cancelled`);
 }

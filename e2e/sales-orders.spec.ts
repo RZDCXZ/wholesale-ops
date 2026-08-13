@@ -123,7 +123,7 @@ test("销售创建、校验、编辑并删除库存不足的多 SKU 草稿", asy
   }
 });
 
-test("销售从详情确认销售单并看到冻结状态、库存变化和追溯入口", async ({ page }) => {
+test("销售从详情确认后填写原因取消销售单，并看到预占释放和永久取消轨迹", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1024 });
   const prisma = new PrismaClient({ adapter: new PrismaPg(databaseUrl) });
   let salesOrderId: string | undefined;
@@ -247,10 +247,66 @@ test("销售从详情确认销售单并看到冻结状态、库存变化和追�
     await expect(page.getByText("0 → 2 +2", { exact: true })).toBeVisible();
     await expect(page.getByText("0 → 3 +3", { exact: true })).toBeVisible();
 
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      ),
+    ).toBe(true);
+    const cancelButton = page.getByRole("button", { name: "取消销售单" });
+    await cancelButton.click();
+    let cancelDialog = page.getByRole("dialog", { name: "取消销售单" });
+    await expect(cancelDialog).toContainText(testSkus[0]!.skuCode);
+    await expect(cancelDialog).toContainText("释放 2 把");
+    await expect(cancelDialog).toContainText(testSkus[1]!.skuCode);
+    await expect(cancelDialog).toContainText("释放 3 支");
+    await expect(cancelDialog).toContainText("销售单永久保留");
+    await expect(cancelDialog.getByLabel("取消原因")).toBeFocused();
+    expect(
+      await page.evaluate(
+        () => document.documentElement.scrollWidth <= document.documentElement.clientWidth,
+      ),
+    ).toBe(true);
+    await cancelDialog.getByRole("button", { name: "返回" }).click();
+    await expect(cancelButton).toBeFocused();
+
+    await cancelButton.click();
+    cancelDialog = page.getByRole("dialog", { name: "取消销售单" });
+    await expect(
+      cancelDialog.getByLabel("取消原因").evaluate((field) =>
+        (field as HTMLTextAreaElement).checkValidity(),
+      ),
+    ).resolves.toBe(false);
+    await cancelDialog.getByLabel("取消原因").fill("   ");
+    await cancelDialog.getByRole("button", { name: "取消并释放预占" }).click();
+    await expect(cancelDialog.getByRole("alert")).toContainText("请填写取消原因");
+    await expect(cancelDialog.getByLabel("取消原因")).toHaveValue("   ");
+    await cancelDialog.getByLabel("取消原因").fill("客户项目延期，停止本次采购");
+    await cancelDialog.getByRole("button", { name: "取消并释放预占" }).click();
+
+    await expect(page).toHaveURL(new RegExp(`/sales-orders/${salesOrderId}\\?notice=cancelled`));
+    await expect(page.getByRole("status")).toContainText("销售单已取消");
+    await expect(page.getByText("已取消", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("原因：客户项目延期，停止本次采购", { exact: true })).toBeVisible();
+    await page.setViewportSize({ width: 1440, height: 1024 });
+    await expect(page.getByRole("button", { name: "取消销售单" })).toHaveCount(0);
+    await expect(page.getByRole("link", { name: "编辑草稿" })).toHaveCount(0);
+    await expect(page.getByText("2 → 0 -2", { exact: true })).toBeVisible();
+    await expect(page.getByText("8 → 10 +2", { exact: true })).toBeVisible();
+    await expect(page.getByText("3 → 0 -3", { exact: true })).toBeVisible();
+    await expect(page.getByText("17 → 20 +3", { exact: true })).toBeVisible();
+
     await switchSession(page, "owner@example.local");
     await page.reload();
     await expect(page.getByRole("link", { name: "查看相关库存流水" })).toBeVisible();
-    await expect(page.getByRole("link", { name: "查看业务审计" }).first()).toBeVisible();
+    await expect(page.getByRole("link", { name: "查看取消审计" })).toBeVisible();
+    await page.getByRole("link", { name: "查看取消审计" }).click();
+    const auditDetail = page.getByRole("dialog", { name: /取消销售单/ });
+    await expect(auditDetail).toContainText("客户项目延期，停止本次采购");
+    await auditDetail.getByRole("button", { name: "关闭" }).click();
+    await page.goto(`/skus/${testSkus[0]!.id}`);
+    await expect(page.getByText("释放预占", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText(/预占 -2/).first()).toBeVisible();
   } finally {
     if (salesOrderId) {
       await prisma.$transaction(async (transaction) => {

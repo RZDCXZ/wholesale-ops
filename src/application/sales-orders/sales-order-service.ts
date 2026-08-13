@@ -38,11 +38,16 @@ const draftInputSchema = z.object({
 const updateDraftInputSchema = draftInputSchema.extend({
   salesOrderId: z.string().min(1),
 });
+const cancelInputSchema = z.object({
+  salesOrderId: z.string().min(1),
+  reason: z.string().trim().min(1),
+});
 
 type ParsedDraftInput = z.output<typeof draftInputSchema>;
 
 export type SalesOrderDraftInput = z.input<typeof draftInputSchema>;
 export type UpdateSalesOrderDraftInput = z.input<typeof updateDraftInputSchema>;
+export type CancelSalesOrderInput = z.input<typeof cancelInputSchema>;
 export type SalesOrderCustomerSnapshot = {
   customerCode: string;
   name: string;
@@ -101,6 +106,14 @@ export type SalesOrderListItem = {
   updatedAt: Date;
   canEdit: boolean;
   canDelete: boolean;
+  canCancel: boolean;
+  items: Array<{
+    skuId: string;
+    skuCode: string;
+    skuName: string;
+    inventoryUnit: string;
+    quantity: number;
+  }>;
 };
 export type SalesOrderListPage = {
   items: SalesOrderListItem[];
@@ -158,6 +171,25 @@ export type ConfirmedSalesOrder = {
   }>;
 };
 
+export type CancelledSalesOrder = {
+  id: string;
+  salesOrderNumber: string;
+  status: "CANCELLED";
+  cancelledAt: Date;
+  cancelledByName: string;
+  reason: string;
+  auditId: string;
+  items: Array<{
+    id: string;
+    skuId: string;
+    skuCode: string;
+    skuName: string;
+    inventoryUnit: string;
+    quantity: number;
+    inventoryImpact: SalesOrderInventoryImpact;
+  }>;
+};
+
 export type SalesOrderDetail = {
   id: string;
   salesOrderNumber: string;
@@ -170,11 +202,19 @@ export type SalesOrderDetail = {
   updatedAt: Date;
   canEdit: boolean;
   canConfirm: boolean;
+  canCancel: boolean;
   confirmation: {
     auditId: string;
     actorId: string;
     actorName: string;
     occurredAt: Date;
+  } | null;
+  cancellation: {
+    auditId: string;
+    actorId: string;
+    actorName: string;
+    occurredAt: Date;
+    reason: string;
   } | null;
   items: Array<{
     id: string;
@@ -192,6 +232,7 @@ export type SalesOrderDetail = {
       availableQuantity: number;
     };
     confirmationImpact: SalesOrderInventoryImpact | null;
+    cancellationImpact: SalesOrderInventoryImpact | null;
   }>;
 };
 
@@ -210,6 +251,7 @@ export class SalesOrderServiceError extends Error {
       | "ORDER_NOT_FOUND"
       | "INVENTORY_SHORTAGE"
       | "INVENTORY_CHANGED"
+      | "CANCEL_REASON_REQUIRED"
       | "INVALID_STATUS",
     message: string,
     readonly field?: string,
@@ -554,6 +596,16 @@ export async function listSalesOrdersPage(
       take: pageSize,
       include: {
         customer: { select: { responsibleSalesId: true } },
+        items: {
+          orderBy: [{ position: "asc" }, { id: "asc" }],
+          select: {
+            skuId: true,
+            skuCodeSnapshot: true,
+            skuNameSnapshot: true,
+            inventoryUnitSnapshot: true,
+            quantity: true,
+          },
+        },
         _count: { select: { items: true } },
       },
     }),
@@ -580,6 +632,16 @@ export async function listSalesOrdersPage(
         updatedAt: order.updatedAt,
         canEdit: canManageDraft,
         canDelete: canManageDraft,
+        canCancel:
+          order.status === "CONFIRMED" &&
+          (isOwner(actor) || order.customer.responsibleSalesId === actor.id),
+        items: order.items.map((item) => ({
+          skuId: item.skuId,
+          skuCode: item.skuCodeSnapshot,
+          skuName: item.skuNameSnapshot,
+          inventoryUnit: item.inventoryUnitSnapshot,
+          quantity: item.quantity,
+        })),
       };
     }),
     page,
@@ -843,7 +905,8 @@ export async function getSalesOrderDetail(
     );
   }
 
-  const [confirmation, reservationMovements] = await Promise.all([
+  const [confirmation, cancellation, reservationMovements, releaseMovements] =
+    await Promise.all([
     database.businessAudit.findFirst({
       where: {
         objectType: "SALES_ORDER",
@@ -858,6 +921,21 @@ export async function getSalesOrderDetail(
         occurredAt: true,
       },
     }),
+    database.businessAudit.findFirst({
+      where: {
+        objectType: "SALES_ORDER",
+        objectId: order.id,
+        action: "SALES_ORDER_CANCELLED",
+      },
+      orderBy: [{ occurredAt: "asc" }, { id: "asc" }],
+      select: {
+        id: true,
+        actorId: true,
+        actorName: true,
+        occurredAt: true,
+        reason: true,
+      },
+    }),
     database.inventoryMovement.findMany({
       where: {
         relatedType: "SALES_ORDER",
@@ -866,9 +944,20 @@ export async function getSalesOrderDetail(
       },
       orderBy: [{ occurredAt: "asc" }, { id: "asc" }],
     }),
+    database.inventoryMovement.findMany({
+      where: {
+        relatedType: "SALES_ORDER",
+        relatedId: order.id,
+        movementType: "RELEASE",
+      },
+      orderBy: [{ occurredAt: "asc" }, { id: "asc" }],
+    }),
   ]);
   const movementBySkuId = new Map(
     reservationMovements.map((movement) => [movement.skuId, movement]),
+  );
+  const releaseMovementBySkuId = new Map(
+    releaseMovements.map((movement) => [movement.skuId, movement]),
   );
   const canEditDraft =
     order.status === "DRAFT" &&
@@ -900,6 +989,9 @@ export async function getSalesOrderDetail(
     updatedAt: order.updatedAt,
     canEdit: canEditDraft,
     canConfirm: canConfirmDraft,
+    canCancel:
+      order.status === "CONFIRMED" &&
+      (isOwner(actor) || order.customer.responsibleSalesId === actor.id),
     confirmation: confirmation
       ? {
           auditId: confirmation.id,
@@ -908,10 +1000,20 @@ export async function getSalesOrderDetail(
           occurredAt: confirmation.occurredAt,
         }
       : null,
+    cancellation: cancellation
+      ? {
+          auditId: cancellation.id,
+          actorId: cancellation.actorId,
+          actorName: cancellation.actorName,
+          occurredAt: cancellation.occurredAt,
+          reason: cancellation.reason ?? "",
+        }
+      : null,
     items: order.items.map((item) => {
       const onHandQuantity = item.sku.inventoryBalance?.onHandQuantity ?? 0;
       const reservedQuantity = item.sku.inventoryBalance?.reservedQuantity ?? 0;
       const movement = movementBySkuId.get(item.skuId);
+      const releaseMovement = releaseMovementBySkuId.get(item.skuId);
       const confirmationImpact = movement
         ? {
             onHandBefore: movement.onHandAfter - movement.onHandDelta,
@@ -923,6 +1025,22 @@ export async function getSalesOrderDetail(
               movement.onHandDelta -
               (movement.reservedAfter - movement.reservedDelta),
             availableAfter: movement.onHandAfter - movement.reservedAfter,
+          }
+        : null;
+      const cancellationImpact = releaseMovement
+        ? {
+            onHandBefore:
+              releaseMovement.onHandAfter - releaseMovement.onHandDelta,
+            onHandAfter: releaseMovement.onHandAfter,
+            reservedBefore:
+              releaseMovement.reservedAfter - releaseMovement.reservedDelta,
+            reservedAfter: releaseMovement.reservedAfter,
+            availableBefore:
+              releaseMovement.onHandAfter -
+              releaseMovement.onHandDelta -
+              (releaseMovement.reservedAfter - releaseMovement.reservedDelta),
+            availableAfter:
+              releaseMovement.onHandAfter - releaseMovement.reservedAfter,
           }
         : null;
       return {
@@ -941,6 +1059,7 @@ export async function getSalesOrderDetail(
           availableQuantity: onHandQuantity - reservedQuantity,
         },
         confirmationImpact,
+        cancellationImpact,
       };
     }),
   };
@@ -1168,5 +1287,186 @@ export async function confirmSalesOrder(
   throw new SalesOrderServiceError(
     "INVENTORY_CHANGED",
     "库存刚刚发生变化，销售单保持草稿。请刷新最新可用量后再次确认。",
+  );
+}
+
+export async function cancelSalesOrder(
+  database: PrismaClient,
+  actor: Actor,
+  input: CancelSalesOrderInput,
+): Promise<CancelledSalesOrder> {
+  assertSalesOrderAccess(actor);
+  const parsed = cancelInputSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new SalesOrderServiceError(
+      "CANCEL_REASON_REQUIRED",
+      "请填写取消原因。",
+      "reason",
+    );
+  }
+  const auditId = randomUUID();
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await database.$transaction(
+        async (transaction) => {
+          await transaction.$queryRaw`
+            SELECT "id"
+            FROM "sales_order"
+            WHERE "id" = ${parsed.data.salesOrderId}
+            FOR UPDATE
+          `;
+          const order = await transaction.salesOrder.findFirst({
+            where: {
+              id: parsed.data.salesOrderId,
+              customer: isOwner(actor)
+                ? undefined
+                : { responsibleSalesId: actor.id },
+            },
+            include: {
+              items: { orderBy: [{ position: "asc" }, { id: "asc" }] },
+            },
+          });
+          if (!order) {
+            throw new SalesOrderServiceError(
+              "ORDER_NOT_FOUND",
+              "销售单不存在或不可取消。",
+            );
+          }
+          if (order.status !== "CONFIRMED") {
+            const message =
+              order.status === "DRAFT"
+                ? "销售单仍是草稿，不能取消。"
+                : order.status === "OUTBOUND"
+                  ? "销售单已出库，不能取消。"
+                  : "销售单已取消，不能再次取消。";
+            throw new SalesOrderServiceError("INVALID_STATUS", message);
+          }
+
+          const skuIds = order.items.map(({ skuId }) => skuId).toSorted();
+          const balances = skuIds.length
+            ? await transaction.$queryRaw<
+                Array<{
+                  skuId: string;
+                  onHandQuantity: number;
+                  reservedQuantity: number;
+                }>
+              >`
+                SELECT
+                  balance."skuId",
+                  balance."onHandQuantity",
+                  balance."reservedQuantity"
+                FROM "inventory_balance" AS balance
+                WHERE balance."skuId" IN (${Prisma.join(skuIds)})
+                ORDER BY balance."skuId"
+                FOR UPDATE
+              `
+            : [];
+          const balanceBySkuId = new Map(
+            balances.map((balance) => [balance.skuId, balance]),
+          );
+          const impactBySkuId = new Map<string, SalesOrderInventoryImpact>();
+
+          for (const item of order.items.toSorted((left, right) =>
+            left.skuId.localeCompare(right.skuId),
+          )) {
+            const balance = balanceBySkuId.get(item.skuId);
+            if (!balance || balance.reservedQuantity < item.quantity) {
+              throw new SalesOrderServiceError(
+                "INVENTORY_CHANGED",
+                "库存预占刚刚发生变化，销售单未取消。请刷新后重试。",
+              );
+            }
+            const reservedAfter = balance.reservedQuantity - item.quantity;
+            impactBySkuId.set(item.skuId, {
+              onHandBefore: balance.onHandQuantity,
+              onHandAfter: balance.onHandQuantity,
+              reservedBefore: balance.reservedQuantity,
+              reservedAfter,
+              availableBefore:
+                balance.onHandQuantity - balance.reservedQuantity,
+              availableAfter: balance.onHandQuantity - reservedAfter,
+            });
+          }
+
+          for (const item of order.items.toSorted((left, right) =>
+            left.skuId.localeCompare(right.skuId),
+          )) {
+            const impact = impactBySkuId.get(item.skuId)!;
+            await transaction.inventoryBalance.update({
+              where: { skuId: item.skuId },
+              data: { reservedQuantity: impact.reservedAfter },
+            });
+            await transaction.inventoryMovement.create({
+              data: {
+                id: randomUUID(),
+                skuId: item.skuId,
+                movementType: "RELEASE",
+                onHandDelta: 0,
+                reservedDelta: -item.quantity,
+                onHandAfter: impact.onHandAfter,
+                reservedAfter: impact.reservedAfter,
+                relatedType: "SALES_ORDER",
+                relatedId: order.id,
+                relatedReference: order.salesOrderNumber,
+                actorId: actor.id,
+                actorName: actor.name,
+              },
+            });
+          }
+
+          await transaction.salesOrder.update({
+            where: { id: order.id },
+            data: { status: "CANCELLED" },
+          });
+          const audit = await transaction.businessAudit.create({
+            data: {
+              id: auditId,
+              actorId: actor.id,
+              actorName: actor.name,
+              action: "SALES_ORDER_CANCELLED",
+              objectType: "SALES_ORDER",
+              objectId: order.id,
+              referenceCode: order.salesOrderNumber,
+              reason: parsed.data.reason,
+              summary: `取消销售单并释放全部预占；${order.items.map((item) => `${item.skuCodeSnapshot} ×${item.quantity}`).join("、")}`,
+            },
+          });
+
+          return {
+            id: order.id,
+            salesOrderNumber: order.salesOrderNumber,
+            status: "CANCELLED",
+            cancelledAt: audit.occurredAt,
+            cancelledByName: audit.actorName,
+            reason: parsed.data.reason,
+            auditId: audit.id,
+            items: order.items.map((item) => ({
+              id: item.id,
+              skuId: item.skuId,
+              skuCode: item.skuCodeSnapshot,
+              skuName: item.skuNameSnapshot,
+              inventoryUnit: item.inventoryUnitSnapshot,
+              quantity: item.quantity,
+              inventoryImpact: impactBySkuId.get(item.skuId)!,
+            })),
+          };
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      if (!isSerializationFailure(error)) throw error;
+      if (attempt === 2) {
+        throw new SalesOrderServiceError(
+          "INVENTORY_CHANGED",
+          "库存或销售单状态刚刚发生变化，销售单未取消。请刷新后重试。",
+        );
+      }
+    }
+  }
+
+  throw new SalesOrderServiceError(
+    "INVENTORY_CHANGED",
+    "库存或销售单状态刚刚发生变化，销售单未取消。请刷新后重试。",
   );
 }
