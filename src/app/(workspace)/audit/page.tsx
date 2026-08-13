@@ -33,6 +33,7 @@ const actionOptions = [
   { value: "SALES_ORDER_DRAFT_CREATED", label: "创建销售单草稿" },
   { value: "SALES_ORDER_DRAFT_UPDATED", label: "编辑销售单草稿" },
   { value: "SALES_ORDER_DRAFT_DELETED", label: "删除销售单草稿" },
+  { value: "SALES_ORDER_CONFIRMED", label: "确认销售单" },
 ] as const;
 const objectOptions = [
   { value: "ACCOUNT", label: "账号" },
@@ -481,7 +482,7 @@ export default async function AuditPage({
                   : detailAudit.objectType === "CUSTOMER" && detailAudit.action !== "CUSTOMER_DELETED"
                     ? `/customers/${detailAudit.objectId}`
                   : detailAudit.objectType === "SALES_ORDER" && detailAudit.action !== "SALES_ORDER_DRAFT_DELETED"
-                    ? `/sales-orders/${detailAudit.objectId}/edit`
+                    ? `/sales-orders/${detailAudit.objectId}`
                 : undefined,
           }}
         />

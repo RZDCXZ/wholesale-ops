@@ -7,9 +7,16 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { PrismaClient } from "../../generated/prisma/client";
 import type { Actor } from "../auth/resolve-actor";
+import { listBusinessAudit } from "../accounts/account-service";
 import {
+  listInventory,
+  listInventoryMovements,
+} from "../inventory/inventory-service";
+import {
+  confirmSalesOrder,
   createSalesOrderDraft,
   deleteSalesOrderDraft,
+  getSalesOrderDetail,
   getSalesOrderDraftForEditing,
   listSalesOrdersPage,
   SalesOrderServiceError,
@@ -202,6 +209,388 @@ describe("销售单草稿", () => {
         referenceCode: draft.salesOrderNumber,
       }),
     ]);
+  });
+
+  it("销售确认自己的草稿后原子冻结内容、建立全部预占、库存流水和业务审计", async () => {
+    const draft = await createSalesOrderDraft(prisma, sales, {
+      customerId: "customer-own",
+      items: [
+        { skuId: "sku-bolt", quantity: 20, transactionPrice: "48.50" },
+        { skuId: "sku-disc", quantity: 30, transactionPrice: "3.80" },
+      ],
+    });
+
+    const confirmed = await confirmSalesOrder(prisma, sales, draft.id);
+
+    expect(confirmed).toMatchObject({
+      id: draft.id,
+      salesOrderNumber: draft.salesOrderNumber,
+      status: "CONFIRMED",
+      items: [
+        expect.objectContaining({
+          skuCode: "WJ-LS-001",
+          quantity: 20,
+          inventoryImpact: {
+            onHandBefore: 120,
+            onHandAfter: 120,
+            reservedBefore: 40,
+            reservedAfter: 60,
+            availableBefore: 80,
+            availableAfter: 60,
+          },
+        }),
+        expect.objectContaining({
+          skuCode: "WJ-QP-004",
+          quantity: 30,
+          inventoryImpact: {
+            onHandBefore: 60,
+            onHandAfter: 60,
+            reservedBefore: 10,
+            reservedAfter: 40,
+            availableBefore: 50,
+            availableAfter: 20,
+          },
+        }),
+      ],
+    });
+    await expect(listInventory(prisma, owner, {})).resolves.toEqual([
+      expect.objectContaining({
+        skuCode: "WJ-LS-001",
+        onHandQuantity: 120,
+        reservedQuantity: 60,
+        availableQuantity: 60,
+      }),
+      expect.objectContaining({
+        skuCode: "WJ-QP-004",
+        onHandQuantity: 60,
+        reservedQuantity: 40,
+        availableQuantity: 20,
+      }),
+    ]);
+    await expect(
+      listInventoryMovements(prisma, owner, { relatedReference: draft.salesOrderNumber }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        skuCode: "WJ-QP-004",
+        movementType: "RESERVATION",
+        onHandDelta: 0,
+        reservedDelta: 30,
+        onHandAfter: 60,
+        reservedAfter: 40,
+        availableAfter: 20,
+      }),
+      expect.objectContaining({
+        skuCode: "WJ-LS-001",
+        movementType: "RESERVATION",
+        onHandDelta: 0,
+        reservedDelta: 20,
+        onHandAfter: 120,
+        reservedAfter: 60,
+        availableAfter: 60,
+      }),
+    ]);
+    await expect(
+      listBusinessAudit(prisma, owner, { action: "SALES_ORDER_CONFIRMED" }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        id: confirmed.auditId,
+        objectId: draft.id,
+        referenceCode: draft.salesOrderNumber,
+        actorName: sales.name,
+      }),
+    ]);
+  });
+
+  it("任一 SKU 可用量不足时整单保持草稿并返回每条差额且不产生部分预占", async () => {
+    const draft = await createSalesOrderDraft(prisma, sales, {
+      customerId: "customer-own",
+      items: [
+        { skuId: "sku-bolt", quantity: 20, transactionPrice: "48.50" },
+        { skuId: "sku-disc", quantity: 70, transactionPrice: "3.80" },
+      ],
+    });
+
+    await expect(confirmSalesOrder(prisma, sales, draft.id)).rejects.toMatchObject({
+      code: "INVENTORY_SHORTAGE",
+      message: "销售单未确认：1 个 SKU 可用量不足。",
+      inventoryShortages: [
+        {
+          skuId: "sku-disc",
+          skuCode: "WJ-QP-004",
+          skuName: "树脂切割片 105mm",
+          inventoryUnit: "片",
+          requiredQuantity: 70,
+          availableQuantity: 50,
+          shortageQuantity: 20,
+        },
+      ],
+    } satisfies Partial<SalesOrderServiceError>);
+    await expect(
+      getSalesOrderDraftForEditing(prisma, sales, draft.id),
+    ).resolves.toMatchObject({
+      status: "DRAFT",
+      items: [
+        expect.objectContaining({ skuCode: "WJ-LS-001", availableQuantity: 80 }),
+        expect.objectContaining({
+          skuCode: "WJ-QP-004",
+          availableQuantity: 50,
+          shortageQuantity: 20,
+        }),
+      ],
+    });
+    await expect(
+      listInventoryMovements(prisma, owner, { relatedReference: draft.salesOrderNumber }),
+    ).resolves.toEqual([]);
+    await expect(
+      listBusinessAudit(prisma, owner, { action: "SALES_ORDER_CONFIRMED" }),
+    ).resolves.toEqual([]);
+  });
+
+  it("确认的业务审计写入失败时状态、全部预占和库存流水一起回滚", async () => {
+    const draft = await createSalesOrderDraft(prisma, sales, {
+      customerId: "customer-own",
+      items: [
+        { skuId: "sku-bolt", quantity: 20, transactionPrice: "48.50" },
+        { skuId: "sku-disc", quantity: 30, transactionPrice: "3.80" },
+      ],
+    });
+    await prisma.$executeRawUnsafe(`
+      CREATE FUNCTION fail_sales_order_confirmation_audit() RETURNS trigger AS $$
+      BEGIN
+        IF NEW.action = 'SALES_ORDER_CONFIRMED' THEN
+          RAISE EXCEPTION 'forced sales order confirmation audit failure';
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+      CREATE TRIGGER fail_sales_order_confirmation_audit_insert
+      BEFORE INSERT ON "business_audit"
+      FOR EACH ROW EXECUTE FUNCTION fail_sales_order_confirmation_audit();
+    `);
+
+    try {
+      await expect(confirmSalesOrder(prisma, sales, draft.id)).rejects.toThrow(
+        "forced sales order confirmation audit failure",
+      );
+      await expect(
+        getSalesOrderDraftForEditing(prisma, sales, draft.id),
+      ).resolves.toMatchObject({ status: "DRAFT" });
+      await expect(listInventory(prisma, owner, {})).resolves.toEqual([
+        expect.objectContaining({
+          skuCode: "WJ-LS-001",
+          reservedQuantity: 40,
+          availableQuantity: 80,
+        }),
+        expect.objectContaining({
+          skuCode: "WJ-QP-004",
+          reservedQuantity: 10,
+          availableQuantity: 50,
+        }),
+      ]);
+      await expect(
+        listInventoryMovements(prisma, owner, { relatedReference: draft.salesOrderNumber }),
+      ).resolves.toEqual([]);
+    } finally {
+      await prisma.$executeRawUnsafe(`
+        DROP TRIGGER IF EXISTS fail_sales_order_confirmation_audit_insert ON "business_audit";
+        DROP FUNCTION IF EXISTS fail_sales_order_confirmation_audit();
+      `);
+    }
+  });
+
+  it("已确认销售单不能重复确认，且原草稿编辑和删除入口都不能改写冻结内容", async () => {
+    const draft = await createSalesOrderDraft(prisma, sales, {
+      customerId: "customer-own",
+      items: [{ skuId: "sku-bolt", quantity: 2, transactionPrice: "48.50" }],
+    });
+    await confirmSalesOrder(prisma, sales, draft.id);
+
+    await expect(confirmSalesOrder(prisma, sales, draft.id)).rejects.toMatchObject({
+      code: "INVALID_STATUS",
+      message: "销售单已确认，不能再次确认。",
+    } satisfies Partial<SalesOrderServiceError>);
+    await expect(
+      updateSalesOrderDraft(prisma, sales, {
+        salesOrderId: draft.id,
+        customerId: "customer-own",
+        items: [{ skuId: "sku-bolt", quantity: 9, transactionPrice: "1.00" }],
+      }),
+    ).rejects.toMatchObject({ code: "DRAFT_NOT_FOUND" });
+    await expect(
+      deleteSalesOrderDraft(prisma, sales, draft.id),
+    ).rejects.toMatchObject({ code: "DRAFT_NOT_FOUND" });
+  });
+
+  it("两个请求争用最后库存时仅一个确认成功，失败方得到最新可用量且库存不为负", async () => {
+    await prisma.inventoryBalance.update({
+      where: { skuId: "sku-disc" },
+      data: { onHandQuantity: 50, reservedQuantity: 0 },
+    });
+    const [firstDraft, secondDraft] = await Promise.all([
+      createSalesOrderDraft(prisma, owner, {
+        customerId: "customer-own",
+        items: [{ skuId: "sku-disc", quantity: 50, transactionPrice: "3.80" }],
+      }),
+      createSalesOrderDraft(prisma, owner, {
+        customerId: "customer-own",
+        items: [{ skuId: "sku-disc", quantity: 50, transactionPrice: "3.80" }],
+      }),
+    ]);
+
+    const results = await Promise.allSettled([
+      confirmSalesOrder(prisma, owner, firstDraft.id),
+      confirmSalesOrder(prisma, owner, secondDraft.id),
+    ]);
+    const succeeded = results.filter(
+      (result): result is PromiseFulfilledResult<Awaited<ReturnType<typeof confirmSalesOrder>>> =>
+        result.status === "fulfilled",
+    );
+    const failed = results.filter(
+      (result): result is PromiseRejectedResult => result.status === "rejected",
+    );
+
+    expect(succeeded).toHaveLength(1);
+    expect(failed).toHaveLength(1);
+    expect(failed[0]!.reason).toMatchObject({
+      code: "INVENTORY_CHANGED",
+      message: "库存刚刚发生变化，销售单保持草稿。请按最新可用量修改后再次确认。",
+      inventoryShortages: [
+        expect.objectContaining({
+          skuCode: "WJ-QP-004",
+          requiredQuantity: 50,
+          availableQuantity: 0,
+          shortageQuantity: 50,
+        }),
+      ],
+    } satisfies Partial<SalesOrderServiceError>);
+    await expect(listInventory(prisma, owner, {})).resolves.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          skuCode: "WJ-QP-004",
+          onHandQuantity: 50,
+          reservedQuantity: 50,
+          availableQuantity: 0,
+        }),
+      ]),
+    );
+    const orderPage = await listSalesOrdersPage(
+      prisma,
+      owner,
+      {},
+      { page: 1, pageSize: 20 },
+    );
+    expect(orderPage).toMatchObject({
+      items: expect.arrayContaining([
+        expect.objectContaining({ id: firstDraft.id }),
+        expect.objectContaining({ id: secondDraft.id }),
+      ]),
+    });
+    expect(
+      orderPage.items
+        .filter(({ id }) => id === firstDraft.id || id === secondDraft.id)
+        .map(({ status }) => status)
+        .toSorted(),
+    ).toEqual(["CONFIRMED", "DRAFT"]);
+  });
+
+  it("确认时重新校验销售创建者和客户当前负责人范围，老板仍可处理任意草稿", async () => {
+    const draft = await createSalesOrderDraft(prisma, sales, {
+      customerId: "customer-own",
+      items: [{ skuId: "sku-bolt", quantity: 2, transactionPrice: "48.50" }],
+    });
+    await prisma.customer.update({
+      where: { id: "customer-own" },
+      data: { responsibleSalesId: otherSales.id },
+    });
+
+    await expect(confirmSalesOrder(prisma, sales, draft.id)).rejects.toMatchObject({
+      code: "DRAFT_NOT_FOUND",
+    } satisfies Partial<SalesOrderServiceError>);
+    await expect(
+      confirmSalesOrder(prisma, otherSales, draft.id),
+    ).rejects.toMatchObject({ code: "DRAFT_NOT_FOUND" });
+    await expect(confirmSalesOrder(prisma, owner, draft.id)).resolves.toMatchObject({
+      status: "CONFIRMED",
+    });
+  });
+
+  it("草稿保存后 SKU 被停用时确认失败并保持草稿且不写入库存活动", async () => {
+    const draft = await createSalesOrderDraft(prisma, sales, {
+      customerId: "customer-own",
+      items: [{ skuId: "sku-bolt", quantity: 2, transactionPrice: "48.50" }],
+    });
+    await prisma.sku.update({
+      where: { id: "sku-bolt" },
+      data: { enabled: false },
+    });
+
+    await expect(confirmSalesOrder(prisma, sales, draft.id)).rejects.toMatchObject({
+      code: "SKU_NOT_AVAILABLE",
+      message: "SKU WJ-LS-001 已停用，销售单不能确认。",
+    } satisfies Partial<SalesOrderServiceError>);
+    await expect(
+      getSalesOrderDraftForEditing(prisma, sales, draft.id),
+    ).resolves.toMatchObject({ status: "DRAFT" });
+    await expect(
+      listInventoryMovements(prisma, owner, { relatedReference: draft.salesOrderNumber }),
+    ).resolves.toEqual([]);
+  });
+
+  it("销售单详情按数据范围返回冻结快照、确认记录和可追溯的库存影响", async () => {
+    const draft = await createSalesOrderDraft(prisma, sales, {
+      customerId: "customer-own",
+      items: [
+        { skuId: "sku-bolt", quantity: 20, transactionPrice: "48.50" },
+        { skuId: "sku-disc", quantity: 30, transactionPrice: "3.80" },
+      ],
+    });
+    const confirmed = await confirmSalesOrder(prisma, sales, draft.id);
+
+    await expect(getSalesOrderDetail(prisma, sales, draft.id)).resolves.toMatchObject({
+      id: draft.id,
+      salesOrderNumber: draft.salesOrderNumber,
+      status: "CONFIRMED",
+      canEdit: false,
+      canConfirm: false,
+      customerSnapshot: draft.customerSnapshot,
+      totalAmountFen: 108_400,
+      confirmation: {
+        auditId: confirmed.auditId,
+        actorName: sales.name,
+        occurredAt: confirmed.confirmedAt,
+      },
+      items: [
+        expect.objectContaining({
+          skuCode: "WJ-LS-001",
+          quantity: 20,
+          currentInventory: {
+            onHandQuantity: 120,
+            reservedQuantity: 60,
+            availableQuantity: 60,
+          },
+          confirmationImpact: {
+            onHandBefore: 120,
+            onHandAfter: 120,
+            reservedBefore: 40,
+            reservedAfter: 60,
+            availableBefore: 80,
+            availableAfter: 60,
+          },
+        }),
+        expect.objectContaining({
+          skuCode: "WJ-QP-004",
+          quantity: 30,
+          currentInventory: {
+            onHandQuantity: 60,
+            reservedQuantity: 40,
+            availableQuantity: 20,
+          },
+        }),
+      ],
+    });
+    await expect(
+      getSalesOrderDetail(prisma, otherSales, draft.id),
+    ).rejects.toMatchObject({ code: "ORDER_NOT_FOUND" });
   });
 
   it("编辑草稿保留原客户交易快照并允许保存库存不足明细且明确返回风险", async () => {

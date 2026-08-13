@@ -332,6 +332,7 @@ export function SalesOrderDraftForm({
       <div className="sticky bottom-3 z-10 flex items-center justify-end gap-2.5 rounded-lg border border-[#e4e7ec] bg-white/95 p-3 shadow-[0_10px_30px_rgba(16,24,40,0.1)] backdrop-blur max-md:fixed max-md:right-0 max-md:bottom-0 max-md:left-0 max-md:rounded-none">
         <Link href="/sales-orders" className="mr-auto inline-flex min-h-11 items-center justify-center rounded-[7px] px-4 text-sm font-semibold text-[#475467] hover:bg-[#f2f4f7] max-md:hidden">返回销售单列表</Link>
         <span className="text-xs text-[#667085] max-sm:hidden">草稿尚未预占库存；保存后可继续核对并确认。</span>
+        {draft ? <Link href={`/sales-orders/${encodeURIComponent(draft.id)}`} className="inline-flex min-h-11 items-center justify-center rounded-[7px] border border-[#d0d5dd] px-4 text-sm font-semibold text-[#344054]">查看并确认</Link> : null}
         <Button variant="primary" type="submit" disabled={pending}>{pending ? "保存中…" : "保存草稿"}</Button>
       </div>
     </form>

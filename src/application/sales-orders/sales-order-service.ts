@@ -2,7 +2,8 @@ import { randomUUID } from "node:crypto";
 
 import { z } from "zod";
 
-import type { Prisma, PrismaClient } from "../../generated/prisma/client";
+import type { PrismaClient } from "../../generated/prisma/client";
+import { Prisma } from "../../generated/prisma/client";
 import { authorizeCapability } from "../auth/access-policy";
 import type { Actor } from "../auth/resolve-actor";
 
@@ -110,6 +111,88 @@ export type SalesOrderListPage = {
 };
 export type SalesOrderResponsibleOption = { id: string; name: string };
 
+export type SalesOrderInventoryImpact = {
+  onHandBefore: number;
+  onHandAfter: number;
+  reservedBefore: number;
+  reservedAfter: number;
+  availableBefore: number;
+  availableAfter: number;
+};
+
+export type SalesOrderInventoryShortage = {
+  skuId: string;
+  skuCode: string;
+  skuName: string;
+  inventoryUnit: string;
+  requiredQuantity: number;
+  availableQuantity: number;
+  shortageQuantity: number;
+};
+
+export type ConfirmedSalesOrder = {
+  id: string;
+  salesOrderNumber: string;
+  status: "CONFIRMED";
+  creatorId: string;
+  customerId: string;
+  customerSnapshot: SalesOrderCustomerSnapshot;
+  totalAmountFen: number;
+  createdAt: Date;
+  updatedAt: Date;
+  confirmedAt: Date;
+  confirmedByName: string;
+  auditId: string;
+  items: Array<{
+    id: string;
+    skuId: string;
+    skuCode: string;
+    skuName: string;
+    inventoryUnit: string;
+    quantity: number;
+    transactionPriceFen: number;
+    subtotalFen: number;
+    inventoryImpact: SalesOrderInventoryImpact;
+  }>;
+};
+
+export type SalesOrderDetail = {
+  id: string;
+  salesOrderNumber: string;
+  status: "DRAFT" | "CONFIRMED" | "OUTBOUND" | "CANCELLED";
+  creatorId: string;
+  customerId: string;
+  customerSnapshot: SalesOrderCustomerSnapshot;
+  totalAmountFen: number;
+  createdAt: Date;
+  updatedAt: Date;
+  canEdit: boolean;
+  canConfirm: boolean;
+  confirmation: {
+    auditId: string;
+    actorId: string;
+    actorName: string;
+    occurredAt: Date;
+  } | null;
+  items: Array<{
+    id: string;
+    skuId: string;
+    skuCode: string;
+    skuName: string;
+    inventoryUnit: string;
+    referencePriceFen: number;
+    quantity: number;
+    transactionPriceFen: number;
+    subtotalFen: number;
+    currentInventory: {
+      onHandQuantity: number;
+      reservedQuantity: number;
+      availableQuantity: number;
+    };
+    confirmationImpact: SalesOrderInventoryImpact | null;
+  }>;
+};
+
 export class SalesOrderServiceError extends Error {
   constructor(
     readonly code:
@@ -121,9 +204,14 @@ export class SalesOrderServiceError extends Error {
       | "INVALID_QUANTITY"
       | "INVALID_TRANSACTION_PRICE"
       | "AMOUNT_TOO_LARGE"
-      | "DRAFT_NOT_FOUND",
+      | "DRAFT_NOT_FOUND"
+      | "ORDER_NOT_FOUND"
+      | "INVENTORY_SHORTAGE"
+      | "INVENTORY_CHANGED"
+      | "INVALID_STATUS",
     message: string,
     readonly field?: string,
+    readonly inventoryShortages?: SalesOrderInventoryShortage[],
   ) {
     super(message);
     this.name = "SalesOrderServiceError";
@@ -132,6 +220,23 @@ export class SalesOrderServiceError extends Error {
 
 function isOwner(actor: Actor): boolean {
   return actor.roles.includes("OWNER");
+}
+
+function isSerializationFailure(error: unknown): boolean {
+  if (!error || typeof error !== "object" || !("code" in error)) return false;
+  const code = error.code;
+  if (code === "P2034") return true;
+  if (code !== "P2010") return false;
+  const meta = "meta" in error && error.meta && typeof error.meta === "object"
+    ? error.meta
+    : undefined;
+  const databaseCode = meta && "code" in meta ? meta.code : undefined;
+  const message = error instanceof Error ? error.message : "";
+  return (
+    databaseCode === "40001" ||
+    message.includes("40001") ||
+    message.toLocaleLowerCase("en").includes("serialize")
+  );
 }
 
 function assertSalesOrderAccess(actor: Actor) {
@@ -711,4 +816,351 @@ export async function deleteSalesOrderDraft(
       auditId,
     };
   });
+}
+
+export async function getSalesOrderDetail(
+  database: PrismaClient,
+  actor: Actor,
+  salesOrderId: string,
+): Promise<SalesOrderDetail> {
+  assertSalesOrderAccess(actor);
+  const order = await database.salesOrder.findFirst({
+    where: { id: salesOrderId, ...salesOrderReadScope(actor) },
+    include: {
+      customer: { select: { responsibleSalesId: true } },
+      items: {
+        include: { sku: { include: { inventoryBalance: true } } },
+        orderBy: [{ position: "asc" }, { id: "asc" }],
+      },
+    },
+  });
+  if (!order) {
+    throw new SalesOrderServiceError(
+      "ORDER_NOT_FOUND",
+      "销售单不存在或不可访问。",
+    );
+  }
+
+  const [confirmation, reservationMovements] = await Promise.all([
+    database.businessAudit.findFirst({
+      where: {
+        objectType: "SALES_ORDER",
+        objectId: order.id,
+        action: "SALES_ORDER_CONFIRMED",
+      },
+      orderBy: [{ occurredAt: "asc" }, { id: "asc" }],
+      select: {
+        id: true,
+        actorId: true,
+        actorName: true,
+        occurredAt: true,
+      },
+    }),
+    database.inventoryMovement.findMany({
+      where: {
+        relatedType: "SALES_ORDER",
+        relatedId: order.id,
+        movementType: "RESERVATION",
+      },
+      orderBy: [{ occurredAt: "asc" }, { id: "asc" }],
+    }),
+  ]);
+  const movementBySkuId = new Map(
+    reservationMovements.map((movement) => [movement.skuId, movement]),
+  );
+  const canManageDraft =
+    order.status === "DRAFT" &&
+    (isOwner(actor) ||
+      (order.creatorId === actor.id &&
+        order.customer.responsibleSalesId === actor.id));
+
+  return {
+    id: order.id,
+    salesOrderNumber: order.salesOrderNumber,
+    status: order.status,
+    creatorId: order.creatorId,
+    customerId: order.customerId,
+    customerSnapshot: {
+      customerCode: order.customerCodeSnapshot,
+      name: order.customerNameSnapshot,
+      contactName: order.customerContactNameSnapshot,
+      phone: order.customerPhoneSnapshot,
+      address: order.customerAddressSnapshot,
+      responsibleSalesId: order.responsibleSalesIdSnapshot,
+      responsibleSalesName: order.responsibleSalesNameSnapshot,
+      paymentTermDays: order.paymentTermDaysSnapshot,
+    },
+    totalAmountFen: order.totalAmountFen,
+    createdAt: order.createdAt,
+    updatedAt: order.updatedAt,
+    canEdit: canManageDraft,
+    canConfirm: canManageDraft,
+    confirmation: confirmation
+      ? {
+          auditId: confirmation.id,
+          actorId: confirmation.actorId,
+          actorName: confirmation.actorName,
+          occurredAt: confirmation.occurredAt,
+        }
+      : null,
+    items: order.items.map((item) => {
+      const onHandQuantity = item.sku.inventoryBalance?.onHandQuantity ?? 0;
+      const reservedQuantity = item.sku.inventoryBalance?.reservedQuantity ?? 0;
+      const movement = movementBySkuId.get(item.skuId);
+      const confirmationImpact = movement
+        ? {
+            onHandBefore: movement.onHandAfter - movement.onHandDelta,
+            onHandAfter: movement.onHandAfter,
+            reservedBefore: movement.reservedAfter - movement.reservedDelta,
+            reservedAfter: movement.reservedAfter,
+            availableBefore:
+              movement.onHandAfter -
+              movement.onHandDelta -
+              (movement.reservedAfter - movement.reservedDelta),
+            availableAfter: movement.onHandAfter - movement.reservedAfter,
+          }
+        : null;
+      return {
+        id: item.id,
+        skuId: item.skuId,
+        skuCode: item.skuCodeSnapshot,
+        skuName: item.skuNameSnapshot,
+        inventoryUnit: item.inventoryUnitSnapshot,
+        referencePriceFen: item.referencePriceFenSnapshot,
+        quantity: item.quantity,
+        transactionPriceFen: item.transactionPriceFen,
+        subtotalFen: item.subtotalFen,
+        currentInventory: {
+          onHandQuantity,
+          reservedQuantity,
+          availableQuantity: onHandQuantity - reservedQuantity,
+        },
+        confirmationImpact,
+      };
+    }),
+  };
+}
+
+export async function confirmSalesOrder(
+  database: PrismaClient,
+  actor: Actor,
+  salesOrderId: string,
+): Promise<ConfirmedSalesOrder> {
+  assertSalesOrderAccess(actor);
+  const auditId = randomUUID();
+  let inventoryChanged = false;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await database.$transaction(
+        async (transaction) => {
+      await transaction.$queryRaw`
+        SELECT "id"
+        FROM "sales_order"
+        WHERE "id" = ${salesOrderId}
+        FOR UPDATE
+      `;
+      const order = await transaction.salesOrder.findFirst({
+        where: {
+          id: salesOrderId,
+          creatorId: isOwner(actor) ? undefined : actor.id,
+          customer: isOwner(actor)
+            ? undefined
+            : { responsibleSalesId: actor.id },
+        },
+        include: {
+          items: {
+            include: { sku: true },
+            orderBy: [{ position: "asc" }, { id: "asc" }],
+          },
+        },
+      });
+      if (!order) {
+        throw new SalesOrderServiceError(
+          "DRAFT_NOT_FOUND",
+          "销售单草稿不存在或不可确认。",
+        );
+      }
+      if (order.status !== "DRAFT") {
+        const message =
+          order.status === "CONFIRMED"
+            ? "销售单已确认，不能再次确认。"
+            : order.status === "OUTBOUND"
+              ? "销售单已出库，不能确认。"
+              : "销售单已取消，不能确认。";
+        throw new SalesOrderServiceError("INVALID_STATUS", message);
+      }
+
+      const skuIds = order.items.map(({ skuId }) => skuId).toSorted();
+      const balances = skuIds.length
+        ? await transaction.$queryRaw<
+            Array<{
+              skuId: string;
+              onHandQuantity: number;
+              reservedQuantity: number;
+            }>
+          >`
+            SELECT
+              balance."skuId",
+              balance."onHandQuantity",
+              balance."reservedQuantity"
+            FROM "inventory_balance" AS balance
+            WHERE balance."skuId" IN (${Prisma.join(skuIds)})
+            ORDER BY balance."skuId"
+            FOR UPDATE
+          `
+        : [];
+      const balanceBySkuId = new Map(
+        balances.map((balance) => [balance.skuId, balance]),
+      );
+      const impactBySkuId = new Map<string, SalesOrderInventoryImpact>();
+      const inventoryShortages: SalesOrderInventoryShortage[] = [];
+
+      for (const item of order.items.toSorted((left, right) =>
+        left.skuId.localeCompare(right.skuId),
+      )) {
+        if (!item.sku.enabled) {
+          throw new SalesOrderServiceError(
+            "SKU_NOT_AVAILABLE",
+            `SKU ${item.skuCodeSnapshot} 已停用，销售单不能确认。`,
+          );
+        }
+        const balance = balanceBySkuId.get(item.skuId) ?? {
+          skuId: item.skuId,
+          onHandQuantity: 0,
+          reservedQuantity: 0,
+        };
+        const availableBefore =
+          balance.onHandQuantity - balance.reservedQuantity;
+        if (availableBefore < item.quantity) {
+          inventoryShortages.push({
+            skuId: item.skuId,
+            skuCode: item.skuCodeSnapshot,
+            skuName: item.skuNameSnapshot,
+            inventoryUnit: item.inventoryUnitSnapshot,
+            requiredQuantity: item.quantity,
+            availableQuantity: availableBefore,
+            shortageQuantity: item.quantity - availableBefore,
+          });
+          continue;
+        }
+        const reservedAfter = balance.reservedQuantity + item.quantity;
+        const impact: SalesOrderInventoryImpact = {
+          onHandBefore: balance.onHandQuantity,
+          onHandAfter: balance.onHandQuantity,
+          reservedBefore: balance.reservedQuantity,
+          reservedAfter,
+          availableBefore,
+          availableAfter: balance.onHandQuantity - reservedAfter,
+        };
+        impactBySkuId.set(item.skuId, impact);
+      }
+
+      if (inventoryShortages.length > 0) {
+        throw new SalesOrderServiceError(
+          inventoryChanged ? "INVENTORY_CHANGED" : "INVENTORY_SHORTAGE",
+          inventoryChanged
+            ? "库存刚刚发生变化，销售单保持草稿。请按最新可用量修改后再次确认。"
+            : `销售单未确认：${inventoryShortages.length} 个 SKU 可用量不足。`,
+          undefined,
+          inventoryShortages,
+        );
+      }
+
+      for (const item of order.items.toSorted((left, right) =>
+        left.skuId.localeCompare(right.skuId),
+      )) {
+        const impact = impactBySkuId.get(item.skuId)!;
+        await transaction.inventoryBalance.update({
+          where: { skuId: item.skuId },
+          data: { reservedQuantity: impact.reservedAfter },
+        });
+        await transaction.inventoryMovement.create({
+          data: {
+            id: randomUUID(),
+            skuId: item.skuId,
+            movementType: "RESERVATION",
+            onHandDelta: 0,
+            reservedDelta: item.quantity,
+            onHandAfter: impact.onHandAfter,
+            reservedAfter: impact.reservedAfter,
+            relatedType: "SALES_ORDER",
+            relatedId: order.id,
+            relatedReference: order.salesOrderNumber,
+            actorId: actor.id,
+            actorName: actor.name,
+          },
+        });
+      }
+
+      const updated = await transaction.salesOrder.update({
+        where: { id: order.id },
+        data: { status: "CONFIRMED" },
+      });
+      const audit = await transaction.businessAudit.create({
+        data: {
+          id: auditId,
+          actorId: actor.id,
+          actorName: actor.name,
+          action: "SALES_ORDER_CONFIRMED",
+          objectType: "SALES_ORDER",
+          objectId: order.id,
+          referenceCode: order.salesOrderNumber,
+          summary: `确认销售单并预占库存；${order.items.map((item) => `${item.skuCodeSnapshot} ×${item.quantity}`).join("、")}`,
+        },
+      });
+
+      return {
+        id: updated.id,
+        salesOrderNumber: updated.salesOrderNumber,
+        status: "CONFIRMED",
+        creatorId: updated.creatorId,
+        customerId: updated.customerId,
+        customerSnapshot: {
+          customerCode: updated.customerCodeSnapshot,
+          name: updated.customerNameSnapshot,
+          contactName: updated.customerContactNameSnapshot,
+          phone: updated.customerPhoneSnapshot,
+          address: updated.customerAddressSnapshot,
+          responsibleSalesId: updated.responsibleSalesIdSnapshot,
+          responsibleSalesName: updated.responsibleSalesNameSnapshot,
+          paymentTermDays: updated.paymentTermDaysSnapshot,
+        },
+        totalAmountFen: updated.totalAmountFen,
+        createdAt: updated.createdAt,
+        updatedAt: updated.updatedAt,
+        confirmedAt: audit.occurredAt,
+        confirmedByName: audit.actorName,
+        auditId: audit.id,
+        items: order.items.map((item) => ({
+          id: item.id,
+          skuId: item.skuId,
+          skuCode: item.skuCodeSnapshot,
+          skuName: item.skuNameSnapshot,
+          inventoryUnit: item.inventoryUnitSnapshot,
+          quantity: item.quantity,
+          transactionPriceFen: item.transactionPriceFen,
+          subtotalFen: item.subtotalFen,
+          inventoryImpact: impactBySkuId.get(item.skuId)!,
+        })),
+      };
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      if (!isSerializationFailure(error)) throw error;
+      inventoryChanged = true;
+      if (attempt === 2) {
+        throw new SalesOrderServiceError(
+          "INVENTORY_CHANGED",
+          "库存刚刚发生变化，销售单保持草稿。请刷新最新可用量后再次确认。",
+        );
+      }
+    }
+  }
+
+  throw new SalesOrderServiceError(
+    "INVENTORY_CHANGED",
+    "库存刚刚发生变化，销售单保持草稿。请刷新最新可用量后再次确认。",
+  );
 }

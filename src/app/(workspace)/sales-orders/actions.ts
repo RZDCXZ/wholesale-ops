@@ -5,9 +5,11 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 
 import {
+  confirmSalesOrder,
   createSalesOrderDraft,
   deleteSalesOrderDraft,
   SalesOrderServiceError,
+  type SalesOrderInventoryShortage,
   updateSalesOrderDraft,
 } from "@/application/sales-orders/sales-order-service";
 import { prisma } from "@/lib/db";
@@ -44,6 +46,8 @@ export type SalesOrderActionState = {
   status: "idle" | "error";
   message?: string;
   fieldErrors?: Record<string, string[]>;
+  inventoryShortages?: SalesOrderInventoryShortage[];
+  inventoryChanged?: boolean;
 };
 
 function validationState(error: z.ZodError): SalesOrderActionState {
@@ -61,6 +65,8 @@ function serviceErrorState(error: unknown): SalesOrderActionState {
       status: "error",
       message: error.message,
       fieldErrors: error.field ? { [error.field]: [error.message] } : undefined,
+      inventoryShortages: error.inventoryShortages,
+      inventoryChanged: error.code === "INVENTORY_CHANGED",
     };
   }
   if (error instanceof Error && error.message === "UNAUTHENTICATED") {
@@ -142,4 +148,32 @@ export async function deleteSalesOrderDraftAction(
   revalidatePath("/sales-orders");
   revalidatePath("/audit");
   redirect("/sales-orders?notice=deleted");
+}
+
+export async function confirmSalesOrderAction(
+  _previousState: SalesOrderActionState,
+  formData: FormData,
+): Promise<SalesOrderActionState> {
+  const salesOrderId = String(formData.get("salesOrderId") ?? "").trim();
+  if (!salesOrderId) {
+    return { status: "error", message: "销售单草稿不存在或不可确认。" };
+  }
+
+  let auditId: string;
+  try {
+    const actor = await getActionActor();
+    auditId = (await confirmSalesOrder(prisma, actor, salesOrderId)).auditId;
+  } catch (error) {
+    return serviceErrorState(error);
+  }
+  revalidatePath("/sales-orders");
+  revalidatePath(`/sales-orders/${salesOrderId}`);
+  revalidatePath(`/sales-orders/${salesOrderId}/edit`);
+  revalidatePath("/inventory");
+  revalidatePath("/inventory/ledger");
+  revalidatePath("/skus");
+  revalidatePath("/audit");
+  redirect(
+    `/sales-orders/${encodeURIComponent(salesOrderId)}?notice=confirmed&audit=${encodeURIComponent(auditId)}`,
+  );
 }
