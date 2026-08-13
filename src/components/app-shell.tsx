@@ -4,25 +4,56 @@ import {
   IconChartBar,
   IconChevronDown,
   IconChevronRight,
+  IconFileInvoice,
   IconLogout,
   IconMenu2,
+  IconPackageExport,
+  IconReceipt2,
+  IconShieldCheck,
+  IconUser,
   IconX,
 } from "@tabler/icons-react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState, type ReactNode } from "react";
 
 import type { Actor } from "@/application/auth/resolve-actor";
+import { getActorNavigation } from "@/application/auth/access-policy";
 import { Button } from "@/components/ui/button";
 import { RoleBadge } from "@/components/ui/role-badge";
 import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
 
+const navigationIcons = {
+  "/overview": IconChartBar,
+  "/sales-orders": IconFileInvoice,
+  "/warehouse/outbound": IconPackageExport,
+  "/receivables": IconReceipt2,
+  "/audit": IconShieldCheck,
+  "/settings/accounts": IconUser,
+};
+
 export function AppShell({ actor, children }: { actor: Actor; children: ReactNode }) {
   const router = useRouter();
+  const pathname = usePathname();
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
   const [isAccountOpen, setIsAccountOpen] = useState(false);
   const [logoutError, setLogoutError] = useState<string>();
+  const actorNavigation = getActorNavigation(actor);
+  const groupedNavigation = actorNavigation.reduce<
+    Array<{ group: string; items: typeof actorNavigation }>
+  >((groups, item) => {
+    const currentGroup = groups.at(-1);
+    if (currentGroup?.group === item.group) {
+      currentGroup.items.push(item);
+    } else {
+      groups.push({ group: item.group, items: [item] });
+    }
+    return groups;
+  }, []);
+  const activeItem = actorNavigation.find(
+    ({ href }) => pathname === href || pathname.startsWith(`${href}/`),
+  );
 
   async function signOut() {
     setLogoutError(undefined);
@@ -74,18 +105,32 @@ export function AppShell({ actor, children }: { actor: Actor; children: ReactNod
         </div>
 
         <nav aria-label="主导航" className="px-2 py-3">
-          <span className="block px-3 py-2 text-[13px] font-semibold text-[#667085]">
-            经营
-          </span>
-          <Link
-            href="/overview"
-            aria-current="page"
-            onClick={() => setIsMobileNavOpen(false)}
-            className="flex min-h-11 items-center gap-3 rounded-[7px] bg-[#eaf2ff] px-3 text-[15px] font-semibold text-[#2563eb]"
-          >
-            <IconChartBar aria-hidden size={20} stroke={1.8} />
-            经营总览
-          </Link>
+          {groupedNavigation.map(({ group, items }) => (
+            <div key={group} className="mb-2">
+              <span className="block px-3 py-2 text-[13px] font-semibold text-[#667085]">
+                {group}
+              </span>
+              {items.map((item) => {
+                const Icon = navigationIcons[item.href as keyof typeof navigationIcons];
+                const active = activeItem?.href === item.href;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    aria-current={active ? "page" : undefined}
+                    onClick={() => setIsMobileNavOpen(false)}
+                    className={cn(
+                      "flex min-h-11 items-center gap-3 rounded-[7px] px-3 text-[15px] font-semibold text-[#344054] hover:bg-[#f6f7f9]",
+                      active && "bg-[#eaf2ff] text-[#2563eb] hover:bg-[#eaf2ff]",
+                    )}
+                  >
+                    <Icon aria-hidden size={20} stroke={1.8} />
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </div>
+          ))}
         </nav>
 
         <div className="mt-auto px-5 py-5 text-xs text-[#98a2b3]">
@@ -105,7 +150,7 @@ export function AppShell({ actor, children }: { actor: Actor; children: ReactNod
               <IconMenu2 aria-hidden size={22} />
             </button>
             <div className="flex items-center gap-2 text-[15px] text-[#344054]">
-              <span>经营总览</span>
+              <span>{activeItem?.label ?? "工作区"}</span>
               <IconChevronRight aria-hidden size={14} className="hidden md:block" />
               <span className="hidden text-[#98a2b3] md:block">工作台</span>
             </div>

@@ -68,7 +68,9 @@ test("390px 下关键控件可触达且账号菜单展示角色", async ({ page 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/forbidden");
 
-  const backLinkBox = await page.getByRole("link", { name: "返回登录页" }).boundingBox();
+  const backLinkBox = await page
+    .getByRole("link", { name: "返回我的工作区" })
+    .boundingBox();
   expect(backLinkBox?.height).toBeGreaterThanOrEqual(44);
 
   await page.goto("/login");

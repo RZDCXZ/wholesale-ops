@@ -15,17 +15,18 @@ enum RoleCode {
 }
 
 model User {
-  id            String     @id
-  name          String
-  email         String     @unique
-  emailVerified Boolean    @default(false)
-  image         String?
-  enabled       Boolean    @default(true)
-  createdAt     DateTime   @default(now())
-  updatedAt     DateTime   @updatedAt
-  sessions      Session[]
-  accounts      Account[]
-  roles         UserRole[]
+  id             String          @id
+  name           String
+  email          String          @unique
+  emailVerified  Boolean         @default(false)
+  image          String?
+  enabled        Boolean         @default(true)
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  sessions       Session[]
+  accounts       Account[]
+  roles          UserRole[]
+  businessAudits BusinessAudit[]
 
   @@map("user")
 }
@@ -84,4 +85,22 @@ model UserRole {
 
   @@id([userId, role])
   @@map("user_role")
+}
+
+model BusinessAudit {
+  id            String   @id
+  actorId       String
+  actorName     String
+  action        String
+  objectType    String
+  objectId      String
+  occurredAt    DateTime @default(now())
+  referenceCode String?
+  reason        String?
+  summary       String?
+  actor         User     @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([actorId])
+  @@index([occurredAt])
+  @@map("business_audit")
 }

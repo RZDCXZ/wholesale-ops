@@ -51,7 +51,7 @@ export function LoginForm() {
         return;
       }
 
-      router.replace("/overview");
+      router.replace("/");
       router.refresh();
     } catch {
       setFormError("登录服务暂不可用，请稍后重试。");
@@ -132,8 +132,12 @@ export function LoginForm() {
       </Button>
 
       <div className="grid gap-1 rounded-[7px] bg-[#f7f9fb] p-3.5">
-        <strong className="text-[13px] text-[#17202a]">演示老板账号</strong>
-        <span className="text-xs text-[#667085]">owner@example.local</span>
+        <strong className="text-[13px] text-[#17202a]">
+          演示账号 · 密码 demo123456
+        </strong>
+        <span className="text-xs leading-5 text-[#667085]">
+          owner · sales · warehouse · finance · multi @example.local
+        </span>
       </div>
     </form>
   );

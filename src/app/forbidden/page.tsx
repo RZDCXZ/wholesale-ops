@@ -10,13 +10,13 @@ export default function ForbiddenPage() {
         </span>
         <h1 className="mt-4 text-xl font-bold">没有访问权限</h1>
         <p className="mt-2 text-sm leading-6 text-[#667085]">
-          当前账号没有进入老板工作区所需的角色。
+          当前账号没有进入此工作区所需的权限。
         </p>
         <Link
-          href="/login"
+          href="/"
           className="mt-5 inline-flex min-h-11 items-center rounded-[7px] bg-[#2563eb] px-4 text-sm font-semibold text-white"
         >
-          返回登录页
+          返回我的工作区
         </Link>
       </section>
     </main>

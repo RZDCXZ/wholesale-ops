@@ -1,26 +1,14 @@
 import { IconChartBar } from "@tabler/icons-react";
 import type { Metadata } from "next";
-import { redirect } from "next/navigation";
 
-import { authorizeActor } from "@/application/auth/resolve-actor";
-import { getCurrentActor } from "@/lib/current-actor";
+import { getPageActor } from "@/lib/server-authorization";
 
 export const metadata: Metadata = {
   title: "经营总览",
 };
 
 export default async function OverviewPage() {
-  const authentication = await getCurrentActor();
-
-  if (authentication.kind !== "authenticated") {
-    redirect("/login");
-  }
-
-  const authorization = authorizeActor(authentication.actor, "OWNER");
-
-  if (authorization.kind !== "authorized") {
-    redirect("/forbidden");
-  }
+  await getPageActor("OVERVIEW_VIEW");
 
   return (
     <>

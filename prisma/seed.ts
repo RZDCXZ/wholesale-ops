@@ -1,6 +1,7 @@
 import { PrismaPg } from "@prisma/adapter-pg";
 import { betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
+import { hashPassword } from "better-auth/crypto";
 import "dotenv/config";
 
 import { PrismaClient, RoleCode } from "../src/generated/prisma/client";
@@ -30,39 +31,73 @@ const seedAuth = betterAuth({
   },
 });
 
-const ownerEmail = "owner@example.local";
-const ownerPassword = "demo123456";
+const demoPassword = "demo123456";
+const demoAccounts = [
+  {
+    name: "张伟",
+    email: "owner@example.local",
+    roles: [RoleCode.OWNER],
+  },
+  {
+    name: "陈敏",
+    email: "sales@example.local",
+    roles: [RoleCode.SALES],
+  },
+  {
+    name: "王强",
+    email: "warehouse@example.local",
+    roles: [RoleCode.WAREHOUSE],
+  },
+  {
+    name: "刘芳",
+    email: "finance@example.local",
+    roles: [RoleCode.FINANCE],
+  },
+  {
+    name: "赵磊",
+    email: "multi@example.local",
+    roles: [RoleCode.SALES, RoleCode.WAREHOUSE],
+  },
+] as const;
 
 try {
-  let owner = await prisma.user.findUnique({ where: { email: ownerEmail } });
+  for (const account of demoAccounts) {
+    let user = await prisma.user.findUnique({
+      where: { email: account.email },
+    });
 
-  if (!owner) {
-    const created = await seedAuth.api.signUpEmail({
-      body: {
-        name: "张伟",
-        email: ownerEmail,
-        password: ownerPassword,
-      },
-    });
-    owner = await prisma.user.findUniqueOrThrow({
-      where: { id: created.user.id },
-    });
+    if (!user) {
+      const created = await seedAuth.api.signUpEmail({
+        body: {
+          name: account.name,
+          email: account.email,
+          password: demoPassword,
+        },
+      });
+      user = await prisma.user.findUniqueOrThrow({
+        where: { id: created.user.id },
+      });
+    }
+
+    const password = await hashPassword(demoPassword);
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: user.id },
+        data: { name: account.name, enabled: true },
+      }),
+      prisma.userRole.deleteMany({ where: { userId: user.id } }),
+      prisma.userRole.createMany({
+        data: account.roles.map((role) => ({ userId: user.id, role })),
+      }),
+      prisma.account.updateMany({
+        where: { userId: user.id, providerId: "credential" },
+        data: { password },
+      }),
+      prisma.session.deleteMany({ where: { userId: user.id } }),
+    ]);
   }
 
-  await prisma.user.update({
-    where: { id: owner.id },
-    data: { name: "张伟", enabled: true },
-  });
-  await prisma.userRole.upsert({
-    where: {
-      userId_role: { userId: owner.id, role: RoleCode.OWNER },
-    },
-    update: {},
-    create: { userId: owner.id, role: RoleCode.OWNER },
-  });
-  await prisma.session.deleteMany({ where: { userId: owner.id } });
-
-  console.log(`已写入虚构老板账号：${ownerEmail}`);
+  console.log(`已写入 ${demoAccounts.length} 个虚构演示账号。`);
 } finally {
   await prisma.$disconnect();
 }

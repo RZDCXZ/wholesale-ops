@@ -1,9 +1,10 @@
 import "server-only";
 
-import { betterAuth } from "better-auth";
+import { APIError, betterAuth } from "better-auth";
 import { prismaAdapter } from "better-auth/adapters/prisma";
 
 import { prisma } from "@/lib/db";
+import { authorizeSessionCreation } from "@/application/auth/session-creation";
 import { getServerEnvironment } from "@/lib/env";
 import { logger } from "@/lib/observability/logger";
 
@@ -28,6 +29,31 @@ export const auth = betterAuth({
   session: {
     expiresIn: 60 * 60 * 24 * 7,
     updateAge: 60 * 60 * 24,
+  },
+  databaseHooks: {
+    session: {
+      create: {
+        async before(session) {
+          const authorization = await authorizeSessionCreation(
+            session.userId,
+            async (userId) => {
+              const user = await prisma.user.findUnique({
+                where: { id: userId },
+                select: { enabled: true },
+              });
+              return user?.enabled ?? null;
+            },
+          );
+
+          if (authorization.kind === "denied") {
+            throw new APIError("UNAUTHORIZED", {
+              code: "INVALID_EMAIL_OR_PASSWORD",
+              message: "Invalid email or password",
+            });
+          }
+        },
+      },
+    },
   },
   logger: {
     level: "error",

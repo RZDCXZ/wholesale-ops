@@ -13,7 +13,7 @@ export default async function LoginPage() {
   const authentication = await getCurrentActor();
 
   if (authentication.kind === "authenticated") {
-    redirect("/overview");
+    redirect("/");
   }
 
   return (
