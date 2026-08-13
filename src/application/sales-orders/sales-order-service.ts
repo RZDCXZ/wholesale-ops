@@ -126,6 +126,8 @@ export type SalesOrderInventoryShortage = {
   skuName: string;
   inventoryUnit: string;
   requiredQuantity: number;
+  onHandQuantity: number;
+  reservedQuantity: number;
   availableQuantity: number;
   shortageQuantity: number;
 };
@@ -868,11 +870,14 @@ export async function getSalesOrderDetail(
   const movementBySkuId = new Map(
     reservationMovements.map((movement) => [movement.skuId, movement]),
   );
-  const canManageDraft =
+  const canEditDraft =
     order.status === "DRAFT" &&
     (isOwner(actor) ||
       (order.creatorId === actor.id &&
         order.customer.responsibleSalesId === actor.id));
+  const canConfirmDraft =
+    order.status === "DRAFT" &&
+    (isOwner(actor) || order.customer.responsibleSalesId === actor.id);
 
   return {
     id: order.id,
@@ -893,8 +898,8 @@ export async function getSalesOrderDetail(
     totalAmountFen: order.totalAmountFen,
     createdAt: order.createdAt,
     updatedAt: order.updatedAt,
-    canEdit: canManageDraft,
-    canConfirm: canManageDraft,
+    canEdit: canEditDraft,
+    canConfirm: canConfirmDraft,
     confirmation: confirmation
       ? {
           auditId: confirmation.id,
@@ -963,7 +968,6 @@ export async function confirmSalesOrder(
       const order = await transaction.salesOrder.findFirst({
         where: {
           id: salesOrderId,
-          creatorId: isOwner(actor) ? undefined : actor.id,
           customer: isOwner(actor)
             ? undefined
             : { responsibleSalesId: actor.id },
@@ -1039,6 +1043,8 @@ export async function confirmSalesOrder(
             skuName: item.skuNameSnapshot,
             inventoryUnit: item.inventoryUnitSnapshot,
             requiredQuantity: item.quantity,
+            onHandQuantity: balance.onHandQuantity,
+            reservedQuantity: balance.reservedQuantity,
             availableQuantity: availableBefore,
             shortageQuantity: item.quantity - availableBefore,
           });

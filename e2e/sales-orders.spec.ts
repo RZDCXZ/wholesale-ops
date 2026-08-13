@@ -197,9 +197,45 @@ test("销售从详情确认销售单并看到冻结状态、库存变化和追�
     const dialog = page.getByRole("dialog", { name: "确认销售单" });
     await expect(dialog).toContainText("广顺五金商行");
     await expect(dialog).toContainText("¥32.18");
+    await expect(dialog.getByText("2 行", { exact: true })).toBeVisible();
     await expect(dialog).toContainText(testSkus[0]!.skuCode);
     await expect(dialog).toContainText(testSkus[1]!.skuCode);
+
+    await prisma.inventoryBalance.update({
+      where: { skuId: testSkus[0]!.id },
+      data: { reservedQuantity: 9 },
+    });
     await dialog.getByRole("button", { name: "确认并预占库存" }).click();
+    await expect(dialog.getByRole("alert")).toContainText("销售单未确认");
+    await expect(dialog.getByRole("alert")).toContainText(
+      `${testSkus[0]!.skuCode} 需要 2 把，当前可用量 1 把，缺少 1 把`,
+    );
+    const dialogShortageRow = dialog.getByTestId(
+      `sales-order-confirm-dialog-inventory-${testSkus[0]!.id}`,
+    );
+    await expect(dialogShortageRow.getByText("10 → 10", { exact: true })).toBeVisible();
+    await expect(dialogShortageRow.getByText("9 → 11", { exact: true })).toBeVisible();
+    await expect(dialogShortageRow.getByText("1 → -1", { exact: true })).toBeVisible();
+    await dialog.getByRole("button", { name: "返回核对" }).click();
+    const confirmationFeedback = page.getByTestId("sales-order-confirmation-feedback");
+    await expect(confirmationFeedback).toContainText("销售单未确认");
+    await expect(confirmationFeedback).toContainText(
+      `${testSkus[0]!.skuCode} 需要 2 把，当前可用量 1 把，缺少 1 把`,
+    );
+    const shortageRow = page.getByTestId(`sales-order-inventory-${testSkus[0]!.id}`);
+    await expect(shortageRow).toContainText("需要 2，当前可用 1，缺少 1 把");
+    await expect(shortageRow.getByText("9 → 11 +2", { exact: true })).toBeVisible();
+    await expect(shortageRow.getByText("1 → -1 -2", { exact: true })).toBeVisible();
+
+    await prisma.inventoryBalance.update({
+      where: { skuId: testSkus[0]!.id },
+      data: { reservedQuantity: 0 },
+    });
+    await page.getByRole("button", { name: "确认销售单" }).click();
+    await page
+      .getByRole("dialog", { name: "确认销售单" })
+      .getByRole("button", { name: "确认并预占库存" })
+      .click();
 
     await expect(page).toHaveURL(new RegExp(`/sales-orders/${salesOrderId}\\?notice=confirmed`));
     await page.setViewportSize({ width: 1440, height: 1024 });
@@ -213,7 +249,7 @@ test("销售从详情确认销售单并看到冻结状态、库存变化和追�
 
     await switchSession(page, "owner@example.local");
     await page.reload();
-    await expect(page.getByRole("link", { name: "查看相关库存活动" })).toBeVisible();
+    await expect(page.getByRole("link", { name: "查看相关库存流水" })).toBeVisible();
     await expect(page.getByRole("link", { name: "查看业务审计" }).first()).toBeVisible();
   } finally {
     if (salesOrderId) {

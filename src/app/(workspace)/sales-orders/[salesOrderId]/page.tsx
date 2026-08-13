@@ -12,9 +12,17 @@ import {
   getSalesOrderDetail,
   SalesOrderServiceError,
 } from "@/application/sales-orders/sales-order-service";
-import { SalesOrderConfirmDialog } from "@/components/sales-order-confirm-dialog";
+import {
+  SalesOrderConfirmationFeedback,
+  SalesOrderConfirmationProvider,
+  SalesOrderConfirmTrigger,
+  SalesOrderInventoryImpacts,
+  SalesOrderInventoryRow,
+  SalesOrderItemShortage,
+} from "@/components/sales-order-confirm-dialog";
 import { prisma } from "@/lib/db";
-import { formatQuantity, formatSignedQuantity } from "@/lib/format-quantity";
+import { formatMoney } from "@/lib/format-money";
+import { formatQuantity } from "@/lib/format-quantity";
 import { getPageActor } from "@/lib/server-authorization";
 
 export const metadata: Metadata = { title: "销售单详情" };
@@ -40,14 +48,6 @@ const statusConfig = {
 
 function first(value: string | string[] | undefined): string {
   return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
-}
-
-function formatMoney(fen: number): string {
-  return new Intl.NumberFormat("zh-CN", {
-    style: "currency",
-    currency: "CNY",
-    minimumFractionDigits: 2,
-  }).format(fen / 100);
 }
 
 function formatDate(date: Date): string {
@@ -113,7 +113,8 @@ export default async function SalesOrderDetailPage({
   };
 
   return (
-    <div className="mx-auto max-w-[1280px]">
+    <SalesOrderConfirmationProvider salesOrder={confirmable}>
+      <div className="mx-auto max-w-[1280px]">
       <header className="mb-[18px] flex min-h-[58px] items-start justify-between gap-5 max-md:grid">
         <div>
           <p className="text-xs font-semibold text-[#2563eb]">销售单 / 详情</p>
@@ -131,7 +132,7 @@ export default async function SalesOrderDetailPage({
         </div>
         <div className="flex flex-wrap gap-2.5">
           {salesOrder.canConfirm ? (
-            <SalesOrderConfirmDialog salesOrder={confirmable} />
+            <SalesOrderConfirmTrigger />
           ) : null}
           {salesOrder.canEdit ? (
             <Link
@@ -150,10 +151,12 @@ export default async function SalesOrderDetailPage({
         </div>
       </header>
 
+      <SalesOrderConfirmationFeedback />
+
       {confirmedNotice ? (
         <div role="status" className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-[#a7d9b6] bg-[#ecfdf3] px-4 py-3 text-[13px] font-semibold text-[#027a48]">
           <IconCircleCheck aria-hidden size={19} />
-          <span>销售单已确认，库存预占、库存活动和业务审计已在同一事务中写入。</span>
+          <span>销售单已确认，库存预占、库存流水和业务审计已在同一事务中写入。</span>
           {canViewAudit && salesOrder.confirmation ? (
             <Link href={`/audit?detail=${encodeURIComponent(salesOrder.confirmation.auditId)}`} className="ml-auto underline underline-offset-2">查看业务审计</Link>
           ) : null}
@@ -197,7 +200,7 @@ export default async function SalesOrderDetailPage({
           <section className="overflow-hidden rounded-lg border border-[#e4e7ec] bg-white">
             <header className="flex flex-wrap items-center justify-between gap-3 border-b border-[#e4e7ec] px-4 py-3.5">
               <div><h2 className="text-base font-bold">库存影响{salesOrder.status === "DRAFT" ? "（确认前预估）" : "（建立预占）"}</h2><p className="mt-1 text-xs text-[#667085]">可用量 = 现存量 - 预占量；当前库存数字来自服务端。</p></div>
-              {canViewInventory ? <Link href={`/inventory/ledger?reference=${encodeURIComponent(salesOrder.salesOrderNumber)}`} className="inline-flex min-h-11 items-center rounded-[7px] border border-[#d0d5dd] px-3 text-sm font-semibold text-[#344054]">查看相关库存活动</Link> : null}
+              {canViewInventory ? <Link href={`/inventory/ledger?reference=${encodeURIComponent(salesOrder.salesOrderNumber)}`} className="inline-flex min-h-11 items-center rounded-[7px] border border-[#d0d5dd] px-3 text-sm font-semibold text-[#344054]">查看相关库存流水</Link> : null}
             </header>
             <div className="grid gap-3 p-4">
               {salesOrder.items.map((item) => {
@@ -210,7 +213,7 @@ export default async function SalesOrderDetailPage({
                   availableAfter: item.currentInventory.availableQuantity - item.quantity,
                 };
                 const shortage = Math.max(0, item.quantity - item.currentInventory.availableQuantity);
-                return <article key={item.id} className={`grid gap-3 rounded-lg border p-3.5 text-[13px] lg:grid-cols-[minmax(180px,1.2fr)_repeat(3,minmax(130px,1fr))] lg:items-center ${shortage > 0 && salesOrder.status === "DRAFT" ? "border-[#edb1b1] bg-[#fff8f8]" : "border-[#e4e7ec]"}`}><div><strong className="font-mono text-xs text-[#1d4ed8]">{item.skuCode}</strong><span className="mt-1 block font-semibold">{item.skuName}</span>{shortage > 0 && salesOrder.status === "DRAFT" ? <small className="mt-1 block font-semibold text-[#c62828]">需要 {item.quantity}，当前可用 {item.currentInventory.availableQuantity}，缺少 {shortage} {item.inventoryUnit}</small> : null}</div><div className="rounded-md bg-[#f7f9fb] px-3 py-2"><span className="text-xs text-[#667085]">现存量</span><strong className="mt-1 block tabular-nums">{impact.onHandBefore} → {impact.onHandAfter} <small className="text-[#667085]">不变</small></strong></div><div className="rounded-md bg-[#f7f9fb] px-3 py-2"><span className="text-xs text-[#667085]">预占量</span><strong className="mt-1 block tabular-nums">{impact.reservedBefore} → {impact.reservedAfter} <small className="text-[#027a48]">{formatSignedQuantity(item.quantity)}</small></strong></div><div className={impact.availableAfter < 0 ? "rounded-md bg-[#fff0f0] px-3 py-2 text-[#c62828]" : "rounded-md bg-[#ecfdf3] px-3 py-2 text-[#027a48]"}><span className="text-xs">可用量</span><strong className="mt-1 block tabular-nums">{impact.availableBefore} → {impact.availableAfter} <small>{formatSignedQuantity(-item.quantity)}</small></strong></div></article>;
+                return <SalesOrderInventoryRow key={item.id} skuId={item.skuId} initiallyShort={shortage > 0 && salesOrder.status === "DRAFT"}><div><strong className="font-mono text-xs text-[#1d4ed8]">{item.skuCode}</strong><span className="mt-1 block font-semibold">{item.skuName}</span>{salesOrder.status === "DRAFT" ? <SalesOrderItemShortage skuId={item.skuId} requiredQuantity={item.quantity} initialAvailableQuantity={item.currentInventory.availableQuantity} inventoryUnit={item.inventoryUnit} /> : null}</div><SalesOrderInventoryImpacts skuId={item.skuId} quantity={item.quantity} initialImpact={impact} showDeltas /></SalesOrderInventoryRow>;
               })}
             </div>
           </section>
@@ -234,6 +237,7 @@ export default async function SalesOrderDetailPage({
           </section>
         </aside>
       </div>
-    </div>
+      </div>
+    </SalesOrderConfirmationProvider>
   );
 }

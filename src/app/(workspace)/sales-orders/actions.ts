@@ -47,7 +47,6 @@ export type SalesOrderActionState = {
   message?: string;
   fieldErrors?: Record<string, string[]>;
   inventoryShortages?: SalesOrderInventoryShortage[];
-  inventoryChanged?: boolean;
 };
 
 function validationState(error: z.ZodError): SalesOrderActionState {
@@ -66,7 +65,6 @@ function serviceErrorState(error: unknown): SalesOrderActionState {
       message: error.message,
       fieldErrors: error.field ? { [error.field]: [error.message] } : undefined,
       inventoryShortages: error.inventoryShortages,
-      inventoryChanged: error.code === "INVENTORY_CHANGED",
     };
   }
   if (error instanceof Error && error.message === "UNAUTHENTICATED") {
@@ -159,10 +157,9 @@ export async function confirmSalesOrderAction(
     return { status: "error", message: "销售单草稿不存在或不可确认。" };
   }
 
-  let auditId: string;
   try {
     const actor = await getActionActor();
-    auditId = (await confirmSalesOrder(prisma, actor, salesOrderId)).auditId;
+    await confirmSalesOrder(prisma, actor, salesOrderId);
   } catch (error) {
     return serviceErrorState(error);
   }
@@ -173,7 +170,5 @@ export async function confirmSalesOrderAction(
   revalidatePath("/inventory/ledger");
   revalidatePath("/skus");
   revalidatePath("/audit");
-  redirect(
-    `/sales-orders/${encodeURIComponent(salesOrderId)}?notice=confirmed&audit=${encodeURIComponent(auditId)}`,
-  );
+  redirect(`/sales-orders/${encodeURIComponent(salesOrderId)}?notice=confirmed`);
 }

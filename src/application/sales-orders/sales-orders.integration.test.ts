@@ -320,6 +320,8 @@ describe("销售单草稿", () => {
           skuName: "树脂切割片 105mm",
           inventoryUnit: "片",
           requiredQuantity: 70,
+          onHandQuantity: 60,
+          reservedQuantity: 10,
           availableQuantity: 50,
           shortageQuantity: 20,
         },
@@ -458,6 +460,8 @@ describe("销售单草稿", () => {
         expect.objectContaining({
           skuCode: "WJ-QP-004",
           requiredQuantity: 50,
+          onHandQuantity: 50,
+          reservedQuantity: 50,
           availableQuantity: 0,
           shortageQuantity: 50,
         }),
@@ -493,7 +497,7 @@ describe("销售单草稿", () => {
     ).toEqual(["CONFIRMED", "DRAFT"]);
   });
 
-  it("确认时重新校验销售创建者和客户当前负责人范围，老板仍可处理任意草稿", async () => {
+  it("确认时按客户当前负责人复核范围，新负责人和老板可处理原创建者草稿", async () => {
     const draft = await createSalesOrderDraft(prisma, sales, {
       customerId: "customer-own",
       items: [{ skuId: "sku-bolt", quantity: 2, transactionPrice: "48.50" }],
@@ -506,15 +510,21 @@ describe("销售单草稿", () => {
     await expect(confirmSalesOrder(prisma, sales, draft.id)).rejects.toMatchObject({
       code: "DRAFT_NOT_FOUND",
     } satisfies Partial<SalesOrderServiceError>);
-    await expect(
-      confirmSalesOrder(prisma, otherSales, draft.id),
-    ).rejects.toMatchObject({ code: "DRAFT_NOT_FOUND" });
-    await expect(confirmSalesOrder(prisma, owner, draft.id)).resolves.toMatchObject({
+    await expect(confirmSalesOrder(prisma, otherSales, draft.id)).resolves.toMatchObject({
+      status: "CONFIRMED",
+      confirmedByName: otherSales.name,
+    });
+
+    const ownerDraft = await createSalesOrderDraft(prisma, owner, {
+      customerId: "customer-other",
+      items: [{ skuId: "sku-bolt", quantity: 2, transactionPrice: "48.50" }],
+    });
+    await expect(confirmSalesOrder(prisma, owner, ownerDraft.id)).resolves.toMatchObject({
       status: "CONFIRMED",
     });
   });
 
-  it("草稿保存后 SKU 被停用时确认失败并保持草稿且不写入库存活动", async () => {
+  it("草稿保存后 SKU 被停用时确认失败并保持草稿且不写入库存流水", async () => {
     const draft = await createSalesOrderDraft(prisma, sales, {
       customerId: "customer-own",
       items: [{ skuId: "sku-bolt", quantity: 2, transactionPrice: "48.50" }],
