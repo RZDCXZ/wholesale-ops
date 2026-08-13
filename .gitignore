@@ -1,0 +1,15 @@
+.env
+.env.local
+.next/
+node_modules/
+src/generated/prisma/
+playwright-report/
+test-results/
+coverage/
+*.tsbuildinfo
+*.log
+.DS_Store
+
+# Local PostgreSQL data and backups
+.data/
+backups/
