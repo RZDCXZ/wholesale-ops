@@ -55,19 +55,48 @@ function removeSensitiveFields(
   seen.delete(value);
 
   if (value instanceof Error) {
-    return {
-      ...sanitizedFields,
-      type: value.name,
-      message: value.message,
-      stack: value.stack,
-    };
-  }
-
-  if (Object.keys(sanitizedFields).length === 0 && Object.keys(value).length === 0) {
-    return value;
+    const sanitizedError = Object.assign(
+      new Error(value.message),
+      sanitizedFields,
+    );
+    sanitizedError.name = value.name;
+    sanitizedError.stack = value.stack;
+    return sanitizedError;
   }
 
   return sanitizedFields;
+}
+
+function sanitizeLogChunk(chunk: string): string {
+  return chunk
+    .split("\n")
+    .map((line) => {
+      if (!line) {
+        return line;
+      }
+
+      try {
+        return JSON.stringify(removeSensitiveFields(JSON.parse(line)));
+      } catch {
+        return JSON.stringify({
+          level: 50,
+          event: "logger.output.sanitization.failed",
+        });
+      }
+    })
+    .join("\n");
+}
+
+function createSanitizingDestination(
+  destination?: WriteStreamLike,
+): DestinationStream {
+  const target = destination ?? process.stdout;
+
+  return {
+    write(chunk: string) {
+      target.write(sanitizeLogChunk(chunk));
+    },
+  } as DestinationStream;
 }
 
 export function createAppLogger(destination?: WriteStreamLike): Logger {
@@ -76,12 +105,15 @@ export function createAppLogger(destination?: WriteStreamLike): Logger {
       level: process.env.LOG_LEVEL ?? "info",
       base: undefined,
       formatters: {
+        bindings(bindings) {
+          return removeSensitiveFields(bindings) as Record<string, unknown>;
+        },
         log(object) {
           return removeSensitiveFields(object) as Record<string, unknown>;
         },
       },
     },
-    destination as DestinationStream | undefined,
+    createSanitizingDestination(destination),
   );
 }
 

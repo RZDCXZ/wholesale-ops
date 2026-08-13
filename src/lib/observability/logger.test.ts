@@ -21,10 +21,18 @@ describe("createAppLogger", () => {
       token: "demo-token-secret",
       event: "auth.boundary.checked",
     });
+    logger
+      .child({
+        session: "child-session-secret",
+        component: "auth",
+        req: { body: { password: "child-password-secret" } },
+      })
+      .info({ event: "auth.child.checked" });
 
     expect(output).not.toMatch(
-      /demo-password-secret|demo-cookie-secret|demo-authorization-secret|demo-session-secret|demo-token-secret/,
+      /demo-password-secret|demo-cookie-secret|demo-authorization-secret|demo-session-secret|demo-token-secret|child-session-secret|child-password-secret/,
     );
+    expect(output).toContain('"component":"auth"');
   });
 
   it("嵌套请求对象中的认证字段也不会进入日志", () => {
@@ -76,6 +84,11 @@ describe("createAppLogger", () => {
       operation = "library-login";
       password = "class-password-secret";
     }
+    class JsonLibraryContext {
+      toJSON() {
+        return { password: "to-json-password-secret" };
+      }
+    }
     const error = Object.assign(new Error("diagnostic-boom"), {
       requestId: "request-safe-value",
       token: "error-token-secret",
@@ -87,14 +100,18 @@ describe("createAppLogger", () => {
       first: sharedContext,
       second: sharedContext,
       library: new LibraryContext(),
+      hiddenLibrary: new JsonLibraryContext(),
     });
 
     expect(output).toContain("diagnostic-boom");
+    expect(output).toContain('"type":"Error"');
     expect(output).toContain("2026-08-13T00:00:00.000Z");
     expect(output.match(/owner-login/g)).toHaveLength(2);
     expect(output).toContain("request-safe-value");
     expect(output).toContain("library-login");
-    expect(output).not.toMatch(/class-password-secret|error-token-secret/);
+    expect(output).not.toMatch(
+      /class-password-secret|error-token-secret|to-json-password-secret/,
+    );
     expect(output).not.toContain("[Circular]");
   });
 });
