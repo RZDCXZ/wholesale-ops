@@ -5,6 +5,10 @@ import {
   type PaymentMethod,
   type PrismaClient,
 } from "../../generated/prisma/client";
+import {
+  paymentMethodLabels,
+  paymentMethodValues,
+} from "../../lib/receivable-display";
 import { authorizeCapability } from "../auth/access-policy";
 import type { Actor } from "../auth/resolve-actor";
 import { isSerializationFailure } from "../database/prisma-errors";
@@ -295,7 +299,9 @@ export async function getReceivableDetail(
   const receivable = await database.receivable.findFirst({
     where: {
       id: receivableId,
-      responsibleSalesIdSnapshot: hasFinancialAccess ? undefined : actor.id,
+      customer: hasFinancialAccess
+        ? undefined
+        : { responsibleSalesId: actor.id },
     },
     include: {
       salesOrder: {
@@ -401,20 +407,7 @@ export type RecordPaymentResult = {
   duplicate: boolean;
 };
 
-const paymentMethods = new Set<PaymentMethod>([
-  "CASH",
-  "BANK_TRANSFER",
-  "WECHAT",
-  "ALIPAY",
-  "OTHER",
-]);
-const paymentMethodLabels: Record<PaymentMethod, string> = {
-  CASH: "现金",
-  BANK_TRANSFER: "银行转账",
-  WECHAT: "微信",
-  ALIPAY: "支付宝",
-  OTHER: "其他",
-};
+const paymentMethods = new Set<PaymentMethod>(paymentMethodValues);
 
 type ParsedPaymentInput = Omit<
   RecordPaymentInput,

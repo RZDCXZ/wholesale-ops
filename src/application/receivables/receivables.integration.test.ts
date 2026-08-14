@@ -358,6 +358,25 @@ describe("部分收款与自动结清", () => {
     } satisfies Partial<ReceivableServiceError>);
   });
 
+  it("客户负责人转交后，收款进度访问范围随当前负责人切换而非停留在历史快照", async () => {
+    await prisma.customer.update({
+      where: { id: "customer-own" },
+      data: { responsibleSalesId: otherSales.id },
+    });
+
+    await expect(
+      getReceivableDetail(prisma, sales, "receivable-partial"),
+    ).rejects.toMatchObject({
+      code: "RECEIVABLE_NOT_FOUND",
+    } satisfies Partial<ReceivableServiceError>);
+    await expect(
+      getReceivableDetail(prisma, otherSales, "receivable-partial"),
+    ).resolves.toMatchObject({
+      visibility: "progress",
+      id: "receivable-partial",
+    });
+  });
+
   it("财务可登记多笔定点金额收款并在累计等于原始金额时自动结清", async () => {
     const firstRecordedAt = new Date("2026-08-13T06:35:00.000Z");
     const first = await recordPayment(
@@ -550,6 +569,26 @@ describe("部分收款与自动结清", () => {
         objectType: "PAYMENT",
       }),
     ).resolves.toHaveLength(1);
+  });
+
+  it("已登记收款在数据库层不可编辑或删除", async () => {
+    const recorded = await recordPayment(prisma, finance, {
+      receivableId: "receivable-pending",
+      paymentDate: new Date("2026-08-13T00:00:00.000Z"),
+      amountFen: 40_000,
+      method: "BANK_TRANSFER",
+      idempotencyKey: "immutable-payment-submit",
+    });
+
+    await expect(
+      prisma.payment.update({
+        where: { id: recorded.payment.id },
+        data: { amountFen: 30_000 },
+      }),
+    ).rejects.toThrow("payment is append-only");
+    await expect(
+      prisma.payment.delete({ where: { id: recorded.payment.id } }),
+    ).rejects.toThrow("payment is append-only");
   });
 
   it("并发登记不能让累计收款超过原始金额", async () => {

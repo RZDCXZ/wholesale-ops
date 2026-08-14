@@ -126,6 +126,14 @@ test("财务登记多笔部分收款并自动结清，销售只看进度且仓�
     await expect(row).toContainText("待收款");
     await row.getByRole("link", { name: "查看详情" }).click();
     await expect(page).toHaveURL(new RegExp(`/receivables/${receivableId}$`));
+    await expect(
+      page.getByRole("button", { name: "登记第一笔收款" }),
+    ).toBeVisible();
+    expect(
+      await page.evaluate(
+        () => (document.activeElement as HTMLElement | null)?.innerText,
+      ),
+    ).not.toBe("登记第一笔收款");
 
     await page.setViewportSize({ width: 390, height: 844 });
     await expect(page.locator("aside")).not.toBeInViewport();

@@ -21,6 +21,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { keepFocusInDialog } from "@/lib/dialog-focus";
 import { formatMoney } from "@/lib/format-money";
+import {
+  paymentMethodLabels,
+  paymentMethodValues,
+} from "@/lib/receivable-display";
 
 const initialState: PaymentActionState = { status: "idle" };
 
@@ -180,11 +184,11 @@ function PaymentDrawer({
                   aria-describedby={state.fieldErrors?.method ? "payment-method-error" : undefined}
                   className="min-h-11 rounded-[7px] border border-[#d0d5dd] bg-white px-3 text-sm font-normal text-[#344054] outline-none focus:border-[#2563eb] focus:ring-3 focus:ring-blue-500/15"
                 >
-                  <option value="CASH">现金</option>
-                  <option value="BANK_TRANSFER">银行转账</option>
-                  <option value="WECHAT">微信</option>
-                  <option value="ALIPAY">支付宝</option>
-                  <option value="OTHER">其他</option>
+                  {paymentMethodValues.map((method) => (
+                    <option key={method} value={method}>
+                      {paymentMethodLabels[method]}
+                    </option>
+                  ))}
                 </select>
                 <FieldError id="payment-method-error" messages={state.fieldErrors?.method} />
               </label>
@@ -257,9 +261,11 @@ export function PaymentDrawerTrigger({
 }) {
   const [open, setOpen] = useState(false);
   const returnFocus = useRef<HTMLButtonElement | null>(null);
+  const wasOpen = useRef(false);
 
   useEffect(() => {
-    if (!open) returnFocus.current?.focus();
+    if (wasOpen.current && !open) returnFocus.current?.focus();
+    wasOpen.current = open;
   }, [open]);
 
   function openDrawer(event: MouseEvent<HTMLButtonElement>) {

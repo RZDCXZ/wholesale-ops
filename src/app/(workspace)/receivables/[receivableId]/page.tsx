@@ -17,32 +17,13 @@ import {
 import { PaymentDrawerTrigger } from "@/components/payment-drawer";
 import { prisma } from "@/lib/db";
 import { formatMoney } from "@/lib/format-money";
+import {
+  paymentMethodLabels,
+  receivableStatusConfig,
+} from "@/lib/receivable-display";
 import { getPageActor } from "@/lib/server-authorization";
 
 export const metadata: Metadata = { title: "应收详情" };
-
-const statusConfig = {
-  PENDING: {
-    label: "待收款",
-    tone: "border-[#f0c36d] bg-[#fff8e6] text-[#8a5a00]",
-  },
-  PARTIAL: {
-    label: "部分收款",
-    tone: "border-[#f0c36d] bg-[#fff8e6] text-[#8a5a00]",
-  },
-  SETTLED: {
-    label: "已结清",
-    tone: "border-[#a7d9b6] bg-[#ecfdf3] text-[#027a48]",
-  },
-} as const;
-
-const paymentMethodLabels = {
-  CASH: "现金",
-  BANK_TRANSFER: "银行转账",
-  WECHAT: "微信",
-  ALIPAY: "支付宝",
-  OTHER: "其他",
-} as const;
 
 function first(value: string | string[] | undefined): string {
   return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
@@ -95,7 +76,7 @@ export default async function ReceivableDetailPage({
     throw error;
   }
   const notice = first((await searchParams).notice);
-  const status = statusConfig[receivable.status];
+  const status = receivableStatusConfig[receivable.status];
   const canViewSalesOrder =
     authorizeCapability(actor, "SALES_ORDERS_VIEW").kind === "authorized";
   const canViewAudit =
@@ -112,7 +93,13 @@ export default async function ReceivableDetailPage({
             <span className={`rounded-md border px-2 py-1 text-xs font-semibold ${status.tone}`}>{status.label}</span>
             {receivable.overdue ? <span className="rounded-md border border-[#edb1b1] bg-[#fff0f0] px-2 py-1 text-xs font-semibold text-[#c62828]">逾期 {receivable.overdueDays} 天</span> : null}
           </div>
-          <p className="mt-1.5 text-[13px] text-[#667085]">{receivable.customer.name} · 来源销售单 {receivable.salesOrder.salesOrderNumber}</p>
+          <p className="mt-1.5 text-[13px] text-[#667085]">
+            {receivable.customer.name} · 未收金额{" "}
+            <strong className="font-semibold tabular-nums text-[#1d4ed8]">
+              {formatMoney(receivable.remainingAmountFen)}
+            </strong>{" "}
+            · 来源销售单 {receivable.salesOrder.salesOrderNumber}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2.5">
           {financial && financial.remainingAmountFen > 0 ? (

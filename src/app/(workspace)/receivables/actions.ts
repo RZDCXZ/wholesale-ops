@@ -9,6 +9,7 @@ import {
   recordPayment,
 } from "@/application/receivables/receivable-service";
 import { prisma } from "@/lib/db";
+import { paymentMethodValues } from "@/lib/receivable-display";
 import { getActionActor } from "@/lib/server-authorization";
 
 const paymentDateSchema = z
@@ -49,7 +50,7 @@ const paymentSchema = z.object({
   receivableId: z.string().trim().min(1),
   paymentDate: paymentDateSchema,
   amountFen: amountSchema,
-  method: z.enum(["CASH", "BANK_TRANSFER", "WECHAT", "ALIPAY", "OTHER"], {
+  method: z.enum(paymentMethodValues, {
     error: "请选择有效的收款方式。",
   }),
   referenceNumber: z.string().trim().max(160, "参考号不能超过 160 个字符。"),

@@ -9,6 +9,7 @@ import {
 } from "@/application/receivables/receivable-service";
 import { prisma } from "@/lib/db";
 import { formatMoney } from "@/lib/format-money";
+import { receivableStatusConfig } from "@/lib/receivable-display";
 import { getPageActor } from "@/lib/server-authorization";
 
 export const metadata: Metadata = { title: "应收" };
@@ -24,21 +25,6 @@ type ListState = {
   page: number;
   pageSize: number;
 };
-
-const statusConfig = {
-  PENDING: {
-    label: "待收款",
-    tone: "border-[#f0c36d] bg-[#fff8e6] text-[#8a5a00]",
-  },
-  PARTIAL: {
-    label: "部分收款",
-    tone: "border-[#f0c36d] bg-[#fff8e6] text-[#8a5a00]",
-  },
-  SETTLED: {
-    label: "已结清",
-    tone: "border-[#a7d9b6] bg-[#ecfdf3] text-[#027a48]",
-  },
-} as const;
 
 function first(value: string | string[] | undefined): string {
   return Array.isArray(value) ? (value[0] ?? "") : (value ?? "");
@@ -79,7 +65,7 @@ function receivablesHref(state: ListState, targetPage = state.page): string {
 }
 
 function SettlementStatus({ status }: Pick<ReceivableListItem, "status">) {
-  const config = statusConfig[status];
+  const config = receivableStatusConfig[status];
   return (
     <span className={`inline-flex rounded-md border px-2 py-1 text-xs font-semibold whitespace-nowrap ${config.tone}`}>
       {config.label}

@@ -26,6 +26,7 @@ import {
 import { prisma } from "@/lib/db";
 import { formatMoney } from "@/lib/format-money";
 import { formatQuantity } from "@/lib/format-quantity";
+import { receivableStatusConfig } from "@/lib/receivable-display";
 import { getPageActor } from "@/lib/server-authorization";
 
 export const metadata: Metadata = { title: "销售单详情" };
@@ -351,8 +352,8 @@ export default async function SalesOrderDetailPage({
                   <h2 className="text-base font-bold">关联应收</h2>
                   <p className="mt-1 font-mono text-xs text-[#667085]">{salesOrder.receivable.receivableNumber}</p>
                 </div>
-                <span className={`rounded-md border px-2 py-1 text-xs font-semibold ${salesOrder.receivable.status === "SETTLED" ? "border-[#a7d9b6] bg-[#ecfdf3] text-[#027a48]" : "border-[#f0c36d] bg-[#fff8e6] text-[#8a5a00]"}`}>
-                  {salesOrder.receivable.status === "PENDING" ? "待收款" : salesOrder.receivable.status === "PARTIAL" ? "部分收款" : "已结清"}
+                <span className={`rounded-md border px-2 py-1 text-xs font-semibold ${receivableStatusConfig[salesOrder.receivable.status].tone}`}>
+                  {receivableStatusConfig[salesOrder.receivable.status].label}
                 </span>
               </div>
               <dl className="mt-4 grid grid-cols-2 gap-3">
