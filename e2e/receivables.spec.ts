@@ -171,12 +171,36 @@ test("财务登记多笔部分收款并自动结清，销售只看进度且仓�
     await expect(page.getByText("已结清", { exact: true }).first()).toBeVisible();
     await expect(page.getByRole("button", { name: "登记收款", exact: true })).toHaveCount(0);
 
+    const finalPayment = page.getByRole("article", { name: "收款 ¥684.00" });
+    await finalPayment.getByRole("button", { name: "撤销收款" }).click();
+    const reversalDialog = page.getByRole("dialog", { name: "撤销这笔收款" });
+    await expect(reversalDialog).toContainText("原收款金额与方式");
+    await expect(reversalDialog).toContainText("¥684.00 · 银行转账");
+    await expect(reversalDialog).toContainText("撤销后累计收款");
+    await expect(reversalDialog).toContainText("¥400.00");
+    await expect(reversalDialog).toContainText("撤销后未收金额");
+    await expect(reversalDialog).toContainText("部分收款");
+    await reversalDialog.getByRole("button", { name: "撤销这笔收款" }).click();
+    await expect(reversalDialog.getByLabel("撤销原因 *")).toBeFocused();
+    await reversalDialog.getByLabel("撤销原因 *").fill("E2E 金额录入错误");
+    await reversalDialog.getByRole("button", { name: "撤销这笔收款" }).click();
+    await expect(page).toHaveURL(new RegExp(`/receivables/${receivableId}\\?notice=payment-reversed`));
+    await expect(page.getByRole("status")).toContainText("原收款仍完整保留");
+    await expect(page.getByText("部分收款", { exact: true }).first()).toBeVisible();
+    await expect(page.getByRole("article", { name: "收款 ¥684.00", exact: true })).toContainText("已撤销");
+    const reversalRecord = page.getByRole("article", { name: "撤销收款 ¥684.00", exact: true });
+    await expect(reversalRecord).toContainText("撤销收款 +¥684.00 未收金额");
+    await expect(reversalRecord).toContainText("E2E 金额录入错误");
+    await expect(page.getByRole("button", { name: "撤销收款" })).toHaveCount(1);
+
     await switchSession(page, "sales@example.local");
     await page.goto(`/receivables/${receivableId}`);
     await expect(page.getByText("当前销售账号只查看自己负责客户的收款进度摘要", { exact: false })).toBeVisible();
     await expect(page.getByText("¥1,084.00", { exact: true }).first()).toBeVisible();
-    await expect(page.getByText("¥0.00", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("¥400.00", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("¥684.00", { exact: true }).first()).toBeVisible();
     await expect(page.getByText("E2E-SK-001", { exact: false })).toHaveCount(0);
+    await expect(page.getByText("E2E 金额录入错误", { exact: false })).toHaveCount(0);
     await expect(page.getByText("收款方式", { exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "登记收款", exact: true })).toHaveCount(0);
 
@@ -196,6 +220,7 @@ test("财务登记多笔部分收款并自动结清，销售只看进度且仓�
       await transaction.$executeRawUnsafe(
         "SET LOCAL session_replication_role = 'replica'",
       );
+      await transaction.paymentReversal.deleteMany({ where: { receivableId } });
       await transaction.payment.deleteMany({ where: { receivableId } });
       await transaction.businessAudit.deleteMany({
         where: {

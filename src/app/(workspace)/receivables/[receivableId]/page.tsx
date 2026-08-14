@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import {
   IconCircleCheck,
   IconFileInvoice,
+  IconRefresh,
   IconWallet,
 } from "@tabler/icons-react";
 import type { Metadata } from "next";
@@ -15,6 +16,7 @@ import {
   ReceivableServiceError,
 } from "@/application/receivables/receivable-service";
 import { PaymentDrawerTrigger } from "@/components/payment-drawer";
+import { PaymentReversalTrigger } from "@/components/payment-reversal-dialog";
 import { prisma } from "@/lib/db";
 import { formatMoney } from "@/lib/format-money";
 import {
@@ -125,6 +127,20 @@ export default async function ReceivableDetailPage({
         </div>
       ) : null}
 
+      {notice === "payment-reversed" && financial ? (
+        <div role="status" className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-[#a7d9b6] bg-[#ecfdf3] px-4 py-3 text-[13px] font-semibold text-[#027a48]">
+          <IconCircleCheck aria-hidden size={19} />
+          <span>撤销收款反向记录、应收金额与状态、业务审计已在同一事务中写入；原收款仍完整保留。</span>
+        </div>
+      ) : null}
+
+      {notice === "payment-already-reversed" && financial ? (
+        <div role="status" className="mb-4 flex flex-wrap items-center gap-2 rounded-lg border border-[#bfdbfe] bg-[#eff6ff] px-4 py-3 text-[13px] font-semibold text-[#1e3a8a]">
+          <IconCircleCheck aria-hidden size={19} />
+          <span>该收款此前已经撤销，本次请求未创建重复反向记录，也未再次改变应收金额。</span>
+        </div>
+      ) : null}
+
       {receivable.visibility === "progress" ? (
         <div className="mb-4 rounded-lg border border-[#bfdbfe] bg-[#eff6ff] px-4 py-3 text-[13px] leading-6 text-[#1e3a8a]">
           当前销售账号只查看自己负责客户的收款进度摘要；收款方式、参考号、备注和登记操作仅向老板与财务开放。
@@ -153,17 +169,58 @@ export default async function ReceivableDetailPage({
 
         {financial ? (
           <section className="overflow-hidden rounded-lg border border-[#e4e7ec] bg-white">
-            <header className="border-b border-[#e4e7ec] px-5 py-4"><h2 className="text-base font-bold">收款记录</h2><p className="mt-1 text-xs text-[#667085]">记录只追加，不提供编辑或删除。</p></header>
+            <header className="border-b border-[#e4e7ec] px-5 py-4"><h2 className="text-base font-bold">收款与撤销记录</h2><p className="mt-1 text-xs text-[#667085]">记录只追加，不提供编辑或删除；撤销记录紧邻对应原收款展示。</p></header>
             {financial.payments.length === 0 ? (
               <div className="grid min-h-64 place-items-center p-6 text-center"><div><span className="mx-auto grid size-11 place-items-center rounded-full bg-[#eff6ff] text-[#2563eb]"><IconWallet aria-hidden size={21} /></span><h3 className="mt-3 font-semibold">尚未登记收款</h3><p className="mt-2 text-[13px] text-[#667085]">登记第一笔有效收款后，应收会自动变为部分收款。</p>{financial.remainingAmountFen > 0 ? <PaymentDrawerTrigger receivable={{ id: financial.id, receivableNumber: financial.receivableNumber, remainingAmountFen: financial.remainingAmountFen }} submissionKey={randomUUID()} today={chinaToday()} label="登记第一笔收款" className="mt-4" /> : null}</div></div>
             ) : (
               <div className="grid gap-3 p-4">
                 {financial.payments.map((payment) => (
-                  <article key={payment.id} className="flex items-start gap-3 rounded-lg border border-[#e4e7ec] p-4 max-sm:grid max-sm:grid-cols-[40px_1fr]">
-                    <span className="grid size-10 shrink-0 place-items-center rounded-full bg-[#eff6ff] text-[#2563eb]"><IconWallet aria-hidden size={19} /></span>
-                    <div className="min-w-0 flex-1"><div className="flex flex-wrap items-center justify-between gap-2"><strong className="text-base tabular-nums">收款 {formatMoney(payment.amountFen)}</strong><span className="text-xs text-[#667085]">登记于 {formatDateTime(payment.recordedAt)}</span></div><p className="mt-1.5 text-[13px] text-[#475467]">{formatCalendarDate(payment.paymentDate)} · {paymentMethodLabels[payment.method]}{payment.referenceNumber ? ` · ${payment.referenceNumber}` : ""}</p>{payment.note ? <p className="mt-2 rounded-md bg-[#f7f9fb] px-3 py-2 text-xs leading-5 text-[#475467]">备注：{payment.note}</p> : null}<p className="mt-2 text-xs text-[#667085]">登记人：{payment.recordedBy.name}</p></div>
-                    {canViewAudit && payment.auditId ? <Link href={`/audit?detail=${encodeURIComponent(payment.auditId)}`} className="inline-flex min-h-11 shrink-0 items-center px-2 text-sm font-semibold text-[#1d4ed8] max-sm:col-start-2 max-sm:justify-self-start">查看审计</Link> : null}
-                  </article>
+                  <div key={payment.id} className="overflow-hidden rounded-lg border border-[#e4e7ec]">
+                    <article aria-label={`收款 ${formatMoney(payment.amountFen)}`} className={`flex items-start gap-3 p-4 max-sm:grid max-sm:grid-cols-[40px_1fr] ${payment.reversal ? "bg-[#f8fafc]" : "bg-white"}`}>
+                      <span className={`grid size-10 shrink-0 place-items-center rounded-full ${payment.reversal ? "bg-[#eef0f3] text-[#667085]" : "bg-[#eff6ff] text-[#2563eb]"}`}><IconWallet aria-hidden size={19} /></span>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <span className="flex flex-wrap items-center gap-2"><strong className="text-base tabular-nums">收款 {formatMoney(payment.amountFen)}</strong>{payment.reversal ? <span className="rounded-md border border-[#d0d5dd] bg-white px-2 py-1 text-xs font-semibold text-[#475467]">已撤销</span> : null}</span>
+                          <span className="text-xs text-[#667085]">登记于 {formatDateTime(payment.recordedAt)}</span>
+                        </div>
+                        <p className="mt-1.5 text-[13px] text-[#475467]">{formatCalendarDate(payment.paymentDate)} · {paymentMethodLabels[payment.method]}{payment.referenceNumber ? ` · ${payment.referenceNumber}` : ""}</p>
+                        {payment.note ? <p className="mt-2 rounded-md bg-white px-3 py-2 text-xs leading-5 text-[#475467]">备注：{payment.note}</p> : null}
+                        <p className="mt-2 text-xs text-[#667085]">登记人：{payment.recordedBy.name}{payment.reversal ? " · 此收款已由下方反向记录恢复未收金额" : ""}</p>
+                      </div>
+                      <div className="flex shrink-0 flex-wrap items-center gap-1 max-sm:col-start-2 max-sm:justify-self-start">
+                        {!payment.reversal ? (
+                          <PaymentReversalTrigger
+                            context={{
+                              receivableNumber: financial.receivableNumber,
+                              originalAmountFen: financial.originalAmountFen,
+                              receivedAmountFen: financial.receivedAmountFen,
+                              payment: {
+                                id: payment.id,
+                                paymentDate: payment.paymentDate,
+                                amountFen: payment.amountFen,
+                                method: payment.method,
+                                referenceNumber: payment.referenceNumber,
+                              },
+                            }}
+                            submissionKey={randomUUID()}
+                          />
+                        ) : null}
+                        {canViewAudit && payment.auditId ? <Link href={`/audit?detail=${encodeURIComponent(payment.auditId)}`} className="inline-flex min-h-11 shrink-0 items-center px-2 text-sm font-semibold text-[#1d4ed8]">查看登记审计</Link> : null}
+                      </div>
+                    </article>
+                    {payment.reversal ? (
+                      <article aria-label={`撤销收款 ${formatMoney(payment.reversal.amountFen)}`} className="flex items-start gap-3 border-t border-[#edb1b1] bg-[#fff8f8] p-4 max-sm:grid max-sm:grid-cols-[40px_1fr]">
+                        <span className="grid size-10 shrink-0 place-items-center rounded-full bg-[#fff0f0] text-[#c62828]"><IconRefresh aria-hidden size={19} /></span>
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center justify-between gap-2"><strong className="text-base tabular-nums text-[#8a1c1c]">撤销收款 +{formatMoney(payment.reversal.amountFen)} 未收金额</strong><span className="text-xs text-[#667085]">撤销于 {formatDateTime(payment.reversal.reversedAt)}</span></div>
+                          <p className="mt-1.5 text-[13px] text-[#475467]">反向记录 · 明确关联上方原收款</p>
+                          <p className="mt-2 rounded-md bg-white px-3 py-2 text-xs leading-5 text-[#475467]">撤销原因：{payment.reversal.reason}</p>
+                          <p className="mt-2 text-xs text-[#667085]">撤销人：{payment.reversal.reversedBy.name}</p>
+                        </div>
+                        {canViewAudit && payment.reversal.auditId ? <Link href={`/audit?detail=${encodeURIComponent(payment.reversal.auditId)}`} className="inline-flex min-h-11 shrink-0 items-center px-2 text-sm font-semibold text-[#1d4ed8] max-sm:col-start-2 max-sm:justify-self-start">查看撤销审计</Link> : null}
+                      </article>
+                    ) : null}
+                  </div>
                 ))}
               </div>
             )}

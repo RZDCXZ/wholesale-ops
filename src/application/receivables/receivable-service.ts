@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import {
   Prisma,
   type PaymentMethod,
+  type PaymentReversal as PaymentReversalRow,
   type PrismaClient,
 } from "../../generated/prisma/client";
 import {
@@ -75,7 +76,18 @@ export type ReceivableProgressDetail = ReceivableProgressFields & {
   visibility: "progress";
 };
 
-export type PaymentRecord = {
+export type PaymentReversalRecord = {
+  id: string;
+  paymentId: string;
+  receivableId: string;
+  amountFen: number;
+  reason: string;
+  reversedAt: Date;
+  reversedBy: { id: string; name: string };
+  auditId: string;
+};
+
+type RecordedPayment = {
   id: string;
   paymentDate: Date;
   amountFen: number;
@@ -84,7 +96,25 @@ export type PaymentRecord = {
   note: string | null;
   recordedAt: Date;
   recordedBy: { id: string; name: string };
+};
+
+function toPaymentReversalRecord(
+  reversal: PaymentReversalRow,
+): Omit<PaymentReversalRecord, "auditId"> {
+  return {
+    id: reversal.id,
+    paymentId: reversal.paymentId,
+    receivableId: reversal.receivableId,
+    amountFen: reversal.amountFen,
+    reason: reversal.reason,
+    reversedAt: reversal.reversedAt,
+    reversedBy: { id: reversal.actorId, name: reversal.actorName },
+  };
+}
+
+export type PaymentRecord = RecordedPayment & {
   auditId: string;
+  reversal: PaymentReversalRecord | null;
 };
 
 export type ReceivableFinancialDetail = Omit<
@@ -117,6 +147,11 @@ export class ReceivableServiceError extends Error {
       | "INVALID_PAYMENT_DETAILS"
       | "RECEIVABLE_SETTLED"
       | "IDEMPOTENCY_CONFLICT"
+      | "PAYMENT_NOT_FOUND"
+      | "REVERSAL_NOT_REVERSIBLE"
+      | "INVALID_REVERSAL_REASON"
+      | "INVALID_REVERSAL_DETAILS"
+      | "REVERSAL_IDEMPOTENCY_CONFLICT"
       | "RECEIVABLE_CHANGED",
     message: string,
   ) {
@@ -143,6 +178,12 @@ function assertReceivablesProgressAccess(actor: Actor): void {
 function assertPaymentAccess(actor: Actor): void {
   if (authorizeCapability(actor, "RECEIVABLES_VIEW").kind !== "authorized") {
     throw new ReceivableServiceError("FORBIDDEN", "没有登记收款的权限。");
+  }
+}
+
+function assertPaymentReversalAccess(actor: Actor): void {
+  if (authorizeCapability(actor, "RECEIVABLES_VIEW").kind !== "authorized") {
+    throw new ReceivableServiceError("FORBIDDEN", "没有撤销收款的权限。");
   }
 }
 
@@ -347,18 +388,26 @@ export async function getReceivableDetail(
     database.payment.findMany({
       where: { receivableId: receivable.id },
       orderBy: [{ recordedAt: "desc" }, { id: "desc" }],
+      include: { reversal: true },
     }),
     database.businessAudit.findMany({
       where: {
         objectType: "PAYMENT",
-        action: "PAYMENT_RECORDED",
+        action: { in: ["PAYMENT_RECORDED", "PAYMENT_REVERSED"] },
         referenceCode: receivable.receivableNumber,
       },
-      select: { id: true, objectId: true },
+      select: { id: true, objectId: true, action: true },
     }),
   ]);
-  const auditIdByPaymentId = new Map(
-    paymentAudits.map((audit) => [audit.objectId, audit.id]),
+  const recordedAuditIdByPaymentId = new Map(
+    paymentAudits
+      .filter(({ action }) => action === "PAYMENT_RECORDED")
+      .map((audit) => [audit.objectId, audit.id]),
+  );
+  const reversalAuditIdByPaymentId = new Map(
+    paymentAudits
+      .filter(({ action }) => action === "PAYMENT_REVERSED")
+      .map((audit) => [audit.objectId, audit.id]),
   );
   return {
     visibility: "financial",
@@ -371,17 +420,29 @@ export async function getReceivableDetail(
     },
     outboundAt: receivable.outboundAt,
     paymentTermDays: receivable.paymentTermDaysSnapshot,
-    payments: payments.map((payment) => ({
-      id: payment.id,
-      paymentDate: payment.paymentDate,
-      amountFen: payment.amountFen,
-      method: payment.method,
-      referenceNumber: payment.referenceNumber,
-      note: payment.note,
-      recordedAt: payment.recordedAt,
-      recordedBy: { id: payment.actorId, name: payment.actorName },
-      auditId: auditIdByPaymentId.get(payment.id) ?? "",
-    })),
+    payments: payments
+      .map((payment) => ({
+        id: payment.id,
+        paymentDate: payment.paymentDate,
+        amountFen: payment.amountFen,
+        method: payment.method,
+        referenceNumber: payment.referenceNumber,
+        note: payment.note,
+        recordedAt: payment.recordedAt,
+        recordedBy: { id: payment.actorId, name: payment.actorName },
+        auditId: recordedAuditIdByPaymentId.get(payment.id) ?? "",
+        reversal: payment.reversal
+          ? {
+              ...toPaymentReversalRecord(payment.reversal),
+              auditId: reversalAuditIdByPaymentId.get(payment.id) ?? "",
+            }
+          : null,
+      }))
+      .sort(
+        (left, right) =>
+          (right.reversal?.reversedAt ?? right.recordedAt).getTime() -
+          (left.reversal?.reversedAt ?? left.recordedAt).getTime(),
+      ),
   };
 }
 
@@ -396,7 +457,7 @@ export type RecordPaymentInput = {
 };
 
 export type RecordPaymentResult = {
-  payment: Omit<PaymentRecord, "auditId">;
+  payment: RecordedPayment;
   receivable: {
     id: string;
     receivedAmountFen: number;
@@ -466,6 +527,254 @@ function parsePaymentInput(input: RecordPaymentInput): ParsedPaymentInput {
     referenceNumber,
     note,
   };
+}
+
+export type ReversePaymentInput = {
+  paymentId: string;
+  reason: string;
+  idempotencyKey: string;
+};
+
+export type ReversePaymentResult = {
+  reversal: Omit<PaymentReversalRecord, "auditId">;
+  receivable: {
+    id: string;
+    receivedAmountFen: number;
+    remainingAmountFen: number;
+    status: "PENDING" | "PARTIAL";
+  };
+  auditId: string;
+  duplicate: boolean;
+};
+
+type ParsedReversePaymentInput = ReversePaymentInput;
+
+function parseReversePaymentInput(
+  input: ReversePaymentInput,
+): ParsedReversePaymentInput {
+  const paymentId = input.paymentId.trim();
+  const reason = input.reason.trim();
+  const idempotencyKey = input.idempotencyKey.trim();
+  if (!reason || reason.length > 1_000) {
+    throw new ReceivableServiceError(
+      "INVALID_REVERSAL_REASON",
+      "撤销原因不能为空且不能超过 1000 个字符。",
+    );
+  }
+  if (!paymentId || !idempotencyKey || idempotencyKey.length > 128) {
+    throw new ReceivableServiceError(
+      "INVALID_REVERSAL_DETAILS",
+      "撤销收款信息不符合要求，请刷新后重试。",
+    );
+  }
+  return { paymentId, reason, idempotencyKey };
+}
+
+function matchesReversalSubmission(
+  reversal: PaymentReversalRow,
+  actor: Actor,
+  input: ParsedReversePaymentInput,
+): boolean {
+  return (
+    reversal.paymentId === input.paymentId &&
+    reversal.reason === input.reason &&
+    reversal.actorId === actor.id
+  );
+}
+
+async function paymentReversalResult(
+  database: PrismaClient | Prisma.TransactionClient,
+  reversal: PaymentReversalRow,
+  duplicate: boolean,
+): Promise<ReversePaymentResult> {
+  const [receivable, audit] = await Promise.all([
+    database.receivable.findUniqueOrThrow({
+      where: { id: reversal.receivableId },
+    }),
+    database.businessAudit.findFirstOrThrow({
+      where: {
+        action: "PAYMENT_REVERSED",
+        objectType: "PAYMENT",
+        objectId: reversal.paymentId,
+      },
+      select: { id: true },
+    }),
+  ]);
+  return {
+    reversal: toPaymentReversalRecord(reversal),
+    receivable: {
+      id: receivable.id,
+      receivedAmountFen: receivable.receivedAmountFen,
+      remainingAmountFen: receivable.remainingAmountFen,
+      status: receivable.receivedAmountFen === 0 ? "PENDING" : "PARTIAL",
+    },
+    auditId: audit.id,
+    duplicate,
+  };
+}
+
+async function existingPaymentReversalByKey(
+  database: PrismaClient | Prisma.TransactionClient,
+  actor: Actor,
+  input: ParsedReversePaymentInput,
+): Promise<ReversePaymentResult | null> {
+  const reversal = await database.paymentReversal.findUnique({
+    where: { idempotencyKey: input.idempotencyKey },
+  });
+  if (!reversal) return null;
+  if (!matchesReversalSubmission(reversal, actor, input)) {
+    throw new ReceivableServiceError(
+      "REVERSAL_IDEMPOTENCY_CONFLICT",
+      "本次提交标识已用于其他撤销收款，请刷新后重试。",
+    );
+  }
+  return paymentReversalResult(database, reversal, true);
+}
+
+export async function reversePayment(
+  database: PrismaClient,
+  actor: Actor,
+  input: ReversePaymentInput,
+  reversedAt = new Date(),
+): Promise<ReversePaymentResult> {
+  assertPaymentReversalAccess(actor);
+  const parsed = parseReversePaymentInput(input);
+  const reversalId = randomUUID();
+  const auditId = randomUUID();
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    try {
+      return await database.$transaction(
+        async (transaction) => {
+          const duplicateByKey = await existingPaymentReversalByKey(
+            transaction,
+            actor,
+            parsed,
+          );
+          if (duplicateByKey) return duplicateByKey;
+
+          const payment = await transaction.payment.findUnique({
+            where: { id: parsed.paymentId },
+          });
+          if (!payment) {
+            const reversal = await transaction.paymentReversal.findUnique({
+              where: { id: parsed.paymentId },
+            });
+            throw new ReceivableServiceError(
+              reversal ? "REVERSAL_NOT_REVERSIBLE" : "PAYMENT_NOT_FOUND",
+              reversal
+                ? "撤销收款反向记录不能再次撤销。"
+                : "原收款不存在或不可撤销。",
+            );
+          }
+
+          await transaction.$queryRaw`
+            SELECT "id"
+            FROM "receivable"
+            WHERE "id" = ${payment.receivableId}
+            FOR UPDATE
+          `;
+          const existing = await transaction.paymentReversal.findUnique({
+            where: { paymentId: payment.id },
+          });
+          if (existing) {
+            return paymentReversalResult(transaction, existing, true);
+          }
+
+          const receivable = await transaction.receivable.findUniqueOrThrow({
+            where: { id: payment.receivableId },
+          });
+          const receivedAmountFen = receivable.receivedAmountFen - payment.amountFen;
+          const remainingAmountFen =
+            receivable.originalAmountFen - receivedAmountFen;
+          if (
+            receivedAmountFen < 0 ||
+            remainingAmountFen < 0 ||
+            remainingAmountFen > receivable.originalAmountFen
+          ) {
+            throw new ReceivableServiceError(
+              "RECEIVABLE_CHANGED",
+              "应收金额与原收款不一致，未撤销收款。请刷新后重试。",
+            );
+          }
+          const status = receivedAmountFen === 0 ? "PENDING" : "PARTIAL";
+          const reversal = await transaction.paymentReversal.create({
+            data: {
+              id: reversalId,
+              paymentId: payment.id,
+              receivableId: payment.receivableId,
+              amountFen: payment.amountFen,
+              reason: parsed.reason,
+              idempotencyKey: parsed.idempotencyKey,
+              reversedAt,
+              actorId: actor.id,
+              actorName: actor.name,
+            },
+          });
+          await transaction.receivable.update({
+            where: { id: receivable.id },
+            data: { receivedAmountFen, remainingAmountFen, status },
+          });
+          await transaction.businessAudit.create({
+            data: {
+              id: auditId,
+              actorId: actor.id,
+              actorName: actor.name,
+              action: "PAYMENT_REVERSED",
+              objectType: "PAYMENT",
+              objectId: payment.id,
+              occurredAt: reversedAt,
+              referenceCode: receivable.receivableNumber,
+              reason: parsed.reason,
+              summary: `撤销收款 ¥${(payment.amountFen / 100).toFixed(2)}；撤销后未收 ¥${(remainingAmountFen / 100).toFixed(2)}；结算状态：${status === "PENDING" ? "待收款" : "部分收款"}`,
+            },
+          });
+
+          return {
+            reversal: toPaymentReversalRecord(reversal),
+            receivable: {
+              id: receivable.id,
+              receivedAmountFen,
+              remainingAmountFen,
+              status,
+            },
+            auditId,
+            duplicate: false,
+          } satisfies ReversePaymentResult;
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      if (isSerializationFailure(error) && attempt < 2) continue;
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === "P2002"
+      ) {
+        const duplicateByKey = await existingPaymentReversalByKey(
+          database,
+          actor,
+          parsed,
+        );
+        if (duplicateByKey) return duplicateByKey;
+        const existing = await database.paymentReversal.findUnique({
+          where: { paymentId: parsed.paymentId },
+        });
+        if (existing) return paymentReversalResult(database, existing, true);
+      }
+      if (isSerializationFailure(error)) {
+        throw new ReceivableServiceError(
+          "RECEIVABLE_CHANGED",
+          "应收刚刚发生变化，未撤销收款。请刷新后重试。",
+        );
+      }
+      throw error;
+    }
+  }
+
+  throw new ReceivableServiceError(
+    "RECEIVABLE_CHANGED",
+    "应收刚刚发生变化，未撤销收款。请刷新后重试。",
+  );
 }
 
 function matchesPaymentSubmission(

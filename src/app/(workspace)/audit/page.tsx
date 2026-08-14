@@ -37,6 +37,7 @@ const actionOptions = [
   { value: "SALES_ORDER_CANCELLED", label: "取消销售单" },
   { value: "SALES_ORDER_OUTBOUND", label: "完成整单出库" },
   { value: "PAYMENT_RECORDED", label: "登记收款" },
+  { value: "PAYMENT_REVERSED", label: "撤销收款" },
 ] as const;
 const objectOptions = [
   { value: "ACCOUNT", label: "账号" },

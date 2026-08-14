@@ -7,6 +7,7 @@ import { z } from "zod";
 import {
   ReceivableServiceError,
   recordPayment,
+  reversePayment,
 } from "@/application/receivables/receivable-service";
 import { prisma } from "@/lib/db";
 import { paymentMethodValues } from "@/lib/receivable-display";
@@ -58,13 +59,28 @@ const paymentSchema = z.object({
   idempotencyKey: z.string().trim().min(1).max(128),
 });
 
+const paymentReversalSchema = z.object({
+  paymentId: z.string().trim().min(1),
+  reason: z
+    .string()
+    .trim()
+    .min(1, "请填写撤销原因。")
+    .max(1_000, "撤销原因不能超过 1000 个字符。"),
+  idempotencyKey: z.string().trim().min(1).max(128),
+});
+
 export type PaymentActionState = {
   status: "idle" | "error";
   message?: string;
   fieldErrors?: Record<string, string[]>;
 };
 
-function validationState(error: z.ZodError): PaymentActionState {
+export type PaymentReversalActionState = PaymentActionState;
+
+function validationState(
+  error: z.ZodError,
+  message = "请检查收款信息。",
+): PaymentActionState {
   const fieldErrors: Record<string, string[]> = {};
   for (const issue of error.issues) {
     const field = String(issue.path[0] ?? "form");
@@ -72,12 +88,15 @@ function validationState(error: z.ZodError): PaymentActionState {
   }
   return {
     status: "error",
-    message: "请检查收款信息。",
+    message,
     fieldErrors,
   };
 }
 
-function serviceErrorState(error: unknown): PaymentActionState {
+function serviceErrorState(
+  error: unknown,
+  fallbackMessage = "收款未登记，请稍后重试。",
+): PaymentActionState {
   if (error instanceof ReceivableServiceError) {
     const field =
       error.code === "INVALID_AMOUNT" || error.code === "AMOUNT_EXCEEDS_REMAINING"
@@ -96,7 +115,7 @@ function serviceErrorState(error: unknown): PaymentActionState {
   if (error instanceof Error && error.message === "UNAUTHENTICATED") {
     return { status: "error", message: "会话已失效，请重新登录。" };
   }
-  return { status: "error", message: "收款未登记，请稍后重试。" };
+  return { status: "error", message: fallbackMessage };
 }
 
 export async function recordPaymentAction(
@@ -136,5 +155,47 @@ export async function recordPaymentAction(
   revalidatePath("/audit");
   redirect(
     `/receivables/${encodeURIComponent(parsed.data.receivableId)}?notice=payment-recorded`,
+  );
+}
+
+export async function reversePaymentAction(
+  _previousState: PaymentReversalActionState,
+  formData: FormData,
+): Promise<PaymentReversalActionState> {
+  const parsed = paymentReversalSchema.safeParse({
+    paymentId: formData.get("paymentId"),
+    reason: formData.get("reason"),
+    idempotencyKey: formData.get("idempotencyKey"),
+  });
+  if (!parsed.success) return validationState(parsed.error, "请检查撤销信息。");
+
+  let receivableId: string;
+  let duplicate: boolean;
+  try {
+    const actor = await getActionActor();
+    const result = await reversePayment(prisma, actor, parsed.data);
+    receivableId = result.receivable.id;
+    duplicate = result.duplicate;
+  } catch (error) {
+    const state = serviceErrorState(
+      error,
+      "撤销收款未完成，请稍后重试。",
+    );
+    if (
+      error instanceof ReceivableServiceError &&
+      error.code === "INVALID_REVERSAL_REASON"
+    ) {
+      return { ...state, fieldErrors: { reason: [error.message] } };
+    }
+    return state;
+  }
+
+  revalidatePath("/receivables");
+  revalidatePath(`/receivables/${receivableId}`);
+  revalidatePath("/sales-orders");
+  revalidatePath("/customers");
+  revalidatePath("/audit");
+  redirect(
+    `/receivables/${encodeURIComponent(receivableId)}?notice=${duplicate ? "payment-already-reversed" : "payment-reversed"}`,
   );
 }

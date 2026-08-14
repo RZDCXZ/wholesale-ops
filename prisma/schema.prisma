@@ -60,6 +60,7 @@ model User {
   responsibleCustomers Customer[]          @relation("CustomerResponsibleSales")
   createdSalesOrders   SalesOrder[]        @relation("SalesOrderCreator")
   recordedPayments     Payment[]
+  paymentReversals     PaymentReversal[]
 
   @@map("user")
 }
@@ -284,6 +285,7 @@ model Receivable {
   salesOrder                 SalesOrder       @relation(fields: [salesOrderId], references: [id], onDelete: Restrict)
   customer                   Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
   payments                   Payment[]
+  paymentReversals           PaymentReversal[]
 
   @@index([customerId])
   @@index([responsibleSalesIdSnapshot])
@@ -306,11 +308,31 @@ model Payment {
   actorName       String
   receivable      Receivable    @relation(fields: [receivableId], references: [id], onDelete: Restrict)
   actor           User          @relation(fields: [actorId], references: [id], onDelete: Restrict)
+  reversal        PaymentReversal?
 
   @@index([receivableId, recordedAt])
   @@index([paymentDate])
   @@index([actorId])
   @@map("payment")
+}
+
+model PaymentReversal {
+  id             String     @id
+  paymentId      String     @unique
+  receivableId   String
+  amountFen      Int
+  reason         String
+  idempotencyKey String     @unique
+  reversedAt     DateTime   @default(now())
+  actorId        String
+  actorName      String
+  payment        Payment    @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  receivable     Receivable @relation(fields: [receivableId], references: [id], onDelete: Restrict)
+  actor          User       @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([receivableId, reversedAt])
+  @@index([actorId])
+  @@map("payment_reversal")
 }
 
 model SalesOrderItem {

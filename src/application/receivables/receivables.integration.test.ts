@@ -12,6 +12,7 @@ import {
   getReceivableDetail,
   listReceivablesPage,
   recordPayment,
+  reversePayment,
   ReceivableServiceError,
 } from "./receivable-service";
 
@@ -487,6 +488,228 @@ describe("部分收款与自动结清", () => {
     ]);
   });
 
+  it("财务撤销已结清应收的有效收款后保留原记录并恢复逾期", async () => {
+    const payment = await recordPayment(
+      prisma,
+      finance,
+      {
+        receivableId: "receivable-pending",
+        paymentDate: new Date("2026-08-13T00:00:00.000Z"),
+        amountFen: 236_000,
+        method: "BANK_TRANSFER",
+        referenceNumber: "SK20260813002",
+        idempotencyKey: "payment-before-reversal",
+      },
+      new Date("2026-08-13T06:35:00.000Z"),
+    );
+
+    const reversedAt = new Date("2026-08-15T06:45:00.000Z");
+    const reversed = await reversePayment(
+      prisma,
+      finance,
+      {
+        paymentId: payment.payment.id,
+        reason: "金额录入错误",
+        idempotencyKey: "reverse-settled-payment",
+      },
+      reversedAt,
+    );
+
+    expect(reversed).toMatchObject({
+      reversal: {
+        id: expect.any(String),
+        paymentId: payment.payment.id,
+        receivableId: "receivable-pending",
+        amountFen: 236_000,
+        reason: "金额录入错误",
+        reversedAt,
+        reversedBy: { id: finance.id, name: finance.name },
+      },
+      receivable: {
+        id: "receivable-pending",
+        receivedAmountFen: 0,
+        remainingAmountFen: 236_000,
+        status: "PENDING",
+      },
+      duplicate: false,
+    });
+    await expect(
+      getReceivableDetail(
+        prisma,
+        finance,
+        "receivable-pending",
+        new Date("2026-08-15T12:00:00.000Z"),
+      ),
+    ).resolves.toMatchObject({
+      receivedAmountFen: 0,
+      remainingAmountFen: 236_000,
+      status: "PENDING",
+      overdue: true,
+      overdueDays: 2,
+      payments: [
+        expect.objectContaining({
+          id: payment.payment.id,
+          amountFen: 236_000,
+          reversal: expect.objectContaining({
+            id: reversed.reversal.id,
+            reason: "金额录入错误",
+          }),
+        }),
+      ],
+    });
+    await expect(
+      prisma.payment.findUnique({ where: { id: payment.payment.id } }),
+    ).resolves.toMatchObject({
+      id: payment.payment.id,
+      amountFen: 236_000,
+    });
+    await expect(
+      listBusinessAudit(prisma, owner, {
+        action: "PAYMENT_REVERSED",
+        objectType: "PAYMENT",
+        referenceCode: "YS-20260801-0001",
+      }),
+    ).resolves.toEqual([
+      expect.objectContaining({
+        id: reversed.auditId,
+        actorName: finance.name,
+        objectId: payment.payment.id,
+        reason: "金额录入错误",
+        summary: "撤销收款 ¥2360.00；撤销后未收 ¥2360.00；结算状态：待收款",
+      }),
+    ]);
+  });
+
+  it("老板撤销多笔收款中的一笔后保留其他有效收款并维持部分收款", async () => {
+    const first = await recordPayment(prisma, finance, {
+      receivableId: "receivable-pending",
+      paymentDate: new Date("2026-08-13T00:00:00.000Z"),
+      amountFen: 40_000,
+      method: "WECHAT",
+      idempotencyKey: "payment-to-reverse-from-partial",
+    });
+    const second = await recordPayment(prisma, owner, {
+      receivableId: "receivable-pending",
+      paymentDate: new Date("2026-08-14T00:00:00.000Z"),
+      amountFen: 20_000,
+      method: "CASH",
+      idempotencyKey: "payment-to-keep-after-reversal",
+    });
+
+    await expect(
+      reversePayment(prisma, owner, {
+        paymentId: first.payment.id,
+        reason: "收款归属录入错误",
+        idempotencyKey: "reverse-one-of-multiple-payments",
+      }),
+    ).resolves.toMatchObject({
+      receivable: {
+        receivedAmountFen: 20_000,
+        remainingAmountFen: 216_000,
+        status: "PARTIAL",
+      },
+    });
+    await expect(
+      getReceivableDetail(prisma, finance, "receivable-pending"),
+    ).resolves.toMatchObject({
+      receivedAmountFen: 20_000,
+      remainingAmountFen: 216_000,
+      status: "PARTIAL",
+      payments: expect.arrayContaining([
+        expect.objectContaining({
+          id: first.payment.id,
+          reversal: expect.objectContaining({ reason: "收款归属录入错误" }),
+        }),
+        expect.objectContaining({ id: second.payment.id, reversal: null }),
+      ]),
+    });
+  });
+
+  it("重复撤销只保留一条反向记录且反向记录不能再次撤销", async () => {
+    const payment = await recordPayment(prisma, finance, {
+      receivableId: "receivable-pending",
+      paymentDate: new Date("2026-08-13T00:00:00.000Z"),
+      amountFen: 40_000,
+      method: "ALIPAY",
+      idempotencyKey: "payment-before-duplicate-reversal",
+    });
+    const input = {
+      paymentId: payment.payment.id,
+      reason: "重复登记",
+      idempotencyKey: "same-reversal-submit",
+    };
+
+    const first = await reversePayment(prisma, finance, input);
+    const duplicate = await reversePayment(prisma, finance, input);
+    const repeatedWithNewKey = await reversePayment(prisma, owner, {
+      ...input,
+      reason: "再次请求不应产生新记录",
+      idempotencyKey: "another-reversal-submit",
+    });
+
+    expect(duplicate).toEqual({ ...first, duplicate: true });
+    expect(repeatedWithNewKey).toMatchObject({
+      reversal: { id: first.reversal.id, reason: "重复登记" },
+      receivable: {
+        receivedAmountFen: 0,
+        remainingAmountFen: 236_000,
+        status: "PENDING",
+      },
+      duplicate: true,
+    });
+    await expect(prisma.paymentReversal.count()).resolves.toBe(1);
+    await expect(
+      reversePayment(prisma, finance, {
+        paymentId: first.reversal.id,
+        reason: "错误尝试撤销反向记录",
+        idempotencyKey: "reverse-a-reversal",
+      }),
+    ).rejects.toMatchObject({
+      code: "REVERSAL_NOT_REVERSIBLE",
+      message: "撤销收款反向记录不能再次撤销。",
+    } satisfies Partial<ReceivableServiceError>);
+  });
+
+  it("撤销收款必须填写原因且销售和仓库不能操作", async () => {
+    const payment = await recordPayment(prisma, finance, {
+      receivableId: "receivable-pending",
+      paymentDate: new Date("2026-08-13T00:00:00.000Z"),
+      amountFen: 40_000,
+      method: "BANK_TRANSFER",
+      idempotencyKey: "payment-before-invalid-reversals",
+    });
+
+    await expect(
+      reversePayment(prisma, finance, {
+        paymentId: payment.payment.id,
+        reason: "   ",
+        idempotencyKey: "empty-reversal-reason",
+      }),
+    ).rejects.toMatchObject({
+      code: "INVALID_REVERSAL_REASON",
+      message: "撤销原因不能为空且不能超过 1000 个字符。",
+    } satisfies Partial<ReceivableServiceError>);
+    for (const actor of [sales, warehouse]) {
+      await expect(
+        reversePayment(prisma, actor, {
+          paymentId: payment.payment.id,
+          reason: "无权操作",
+          idempotencyKey: `forbidden-reversal-${actor.id}`,
+        }),
+      ).rejects.toMatchObject({
+        code: "FORBIDDEN",
+      } satisfies Partial<ReceivableServiceError>);
+    }
+    await expect(prisma.paymentReversal.count()).resolves.toBe(0);
+    await expect(
+      getReceivableDetail(prisma, finance, "receivable-pending"),
+    ).resolves.toMatchObject({
+      receivedAmountFen: 40_000,
+      remainingAmountFen: 196_000,
+      status: "PARTIAL",
+    });
+  });
+
   it("零、负数、超额金额和无权角色均不能产生收款", async () => {
     const baseInput = {
       receivableId: "receivable-pending",
@@ -591,6 +814,31 @@ describe("部分收款与自动结清", () => {
     ).rejects.toThrow("payment is append-only");
   });
 
+  it("撤销收款反向记录在数据库层不可编辑或删除", async () => {
+    const payment = await recordPayment(prisma, finance, {
+      receivableId: "receivable-pending",
+      paymentDate: new Date("2026-08-13T00:00:00.000Z"),
+      amountFen: 40_000,
+      method: "BANK_TRANSFER",
+      idempotencyKey: "payment-before-immutable-reversal",
+    });
+    const reversed = await reversePayment(prisma, finance, {
+      paymentId: payment.payment.id,
+      reason: "金额录入错误",
+      idempotencyKey: "immutable-reversal",
+    });
+
+    await expect(
+      prisma.paymentReversal.update({
+        where: { id: reversed.reversal.id },
+        data: { reason: "试图修改原因" },
+      }),
+    ).rejects.toThrow("payment reversal is append-only");
+    await expect(
+      prisma.paymentReversal.delete({ where: { id: reversed.reversal.id } }),
+    ).rejects.toThrow("payment reversal is append-only");
+  });
+
   it("并发登记不能让累计收款超过原始金额", async () => {
     const results = await Promise.allSettled([
       recordPayment(prisma, finance, {
@@ -661,6 +909,56 @@ describe("部分收款与自动结清", () => {
       await prisma.$executeRawUnsafe(`
         DROP TRIGGER IF EXISTS fail_payment_recorded_audit_insert ON "business_audit";
         DROP FUNCTION IF EXISTS fail_payment_recorded_audit();
+      `);
+    }
+  });
+
+  it("撤销业务审计写入失败时反向记录、应收金额与状态全部回滚", async () => {
+    const payment = await recordPayment(prisma, finance, {
+      receivableId: "receivable-pending",
+      paymentDate: new Date("2026-08-13T00:00:00.000Z"),
+      amountFen: 40_000,
+      method: "BANK_TRANSFER",
+      idempotencyKey: "payment-before-reversal-rollback",
+    });
+    await prisma.$executeRawUnsafe(`
+      CREATE FUNCTION fail_payment_reversed_audit() RETURNS trigger AS $$
+      BEGIN
+        IF NEW.action = 'PAYMENT_REVERSED' THEN
+          RAISE EXCEPTION 'forced payment reversal audit failure';
+        END IF;
+        RETURN NEW;
+      END;
+      $$ LANGUAGE plpgsql;
+      CREATE TRIGGER fail_payment_reversed_audit_insert
+      BEFORE INSERT ON "business_audit"
+      FOR EACH ROW EXECUTE FUNCTION fail_payment_reversed_audit();
+    `);
+
+    try {
+      await expect(
+        reversePayment(prisma, finance, {
+          paymentId: payment.payment.id,
+          reason: "金额录入错误",
+          idempotencyKey: "rollback-reversal-submit",
+        }),
+      ).rejects.toThrow("forced payment reversal audit failure");
+      await expect(prisma.paymentReversal.count()).resolves.toBe(0);
+      await expect(
+        getReceivableDetail(prisma, finance, "receivable-pending"),
+      ).resolves.toMatchObject({
+        receivedAmountFen: 40_000,
+        remainingAmountFen: 196_000,
+        status: "PARTIAL",
+        payments: [expect.objectContaining({ reversal: null })],
+      });
+      await expect(
+        listBusinessAudit(prisma, owner, { action: "PAYMENT_REVERSED" }),
+      ).resolves.toEqual([]);
+    } finally {
+      await prisma.$executeRawUnsafe(`
+        DROP TRIGGER IF EXISTS fail_payment_reversed_audit_insert ON "business_audit";
+        DROP FUNCTION IF EXISTS fail_payment_reversed_audit();
       `);
     }
   });
