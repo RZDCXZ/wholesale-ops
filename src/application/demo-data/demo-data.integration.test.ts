@@ -184,6 +184,15 @@ describe("演示数据命令", () => {
       accounts: accounts.map(({ email, roles }) => ({ email, roles })),
       skuCount: skus.total,
       customerCount: customers.total,
+      stableDemoReferences: {
+        customer: customers.items.find(
+          ({ customerCode }) => customerCode === "KH-0003",
+        ),
+        bolt: skus.items.find(({ skuCode }) => skuCode === "WJ-LS-001"),
+        cuttingDisc: skus.items.find(
+          ({ skuCode }) => skuCode === "WJ-QP-004",
+        ),
+      },
       statusCounts: {
         draft: draftOrders.total,
         confirmed: confirmedOrders.total,
@@ -233,11 +242,28 @@ describe("演示数据命令", () => {
       ],
       skuCount: 30,
       customerCount: 8,
+      stableDemoReferences: {
+        customer: expect.objectContaining({
+          id: "demo-customer-kh-0003",
+          customerCode: "KH-0003",
+          name: "广顺五金商行",
+          phone: "138 0000 0000",
+        }),
+        bolt: expect.objectContaining({
+          id: "demo-sku-wj-ls-001",
+          skuCode: "WJ-LS-001",
+        }),
+        cuttingDisc: expect.objectContaining({
+          id: "demo-sku-wj-qp-004",
+          skuCode: "WJ-QP-004",
+          availableQuantity: 50,
+        }),
+      },
       statusCounts: { draft: 3, confirmed: 3, outbound: 12, cancelled: 2 },
       pendingOutboundCount: 3,
       partialReceivableCount: 2,
       overdueReceivableCount: 2,
-      warningSkuCodes: ["WJ-BS-004", "WJ-JD-005", "WJ-LS-001", "WJ-QP-002", "WJ-ZT-003"],
+      warningSkuCodes: ["WJ-BS-004", "WJ-BS-007", "WJ-JD-005", "WJ-LM-006", "WJ-ZT-003"],
       exactStock: { quantity: 3, availableQuantity: 3 },
       shortage: { quantity: 4, availableQuantity: 0 },
       reversedPaymentTimeline: {
@@ -405,7 +431,7 @@ describe("演示数据命令", () => {
         },
       );
       const extraSku = await createSalesOrderDraft(prisma, sales, {
-        customerId: "demo-customer-01",
+        customerId: "demo-customer-kh-0003",
         items: [
           {
             skuId: "demo-sku-21",
@@ -435,7 +461,7 @@ describe("演示数据命令", () => {
       );
 
       const draft = await createSalesOrderDraft(prisma, sales, {
-        customerId: "demo-customer-01",
+        customerId: "demo-customer-kh-0003",
         items: [
           {
             skuId: "demo-sku-21",

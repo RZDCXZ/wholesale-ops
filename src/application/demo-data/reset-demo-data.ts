@@ -30,6 +30,7 @@ const accounts: Array<{
 ];
 
 type SkuBlueprint = {
+  id?: string;
   skuCode: string;
   name: string;
   category: string;
@@ -40,13 +41,13 @@ type SkuBlueprint = {
 };
 
 const skus: SkuBlueprint[] = [
-  { skuCode: "WJ-LS-001", name: "304 不锈钢六角螺栓 M8×30", category: "紧固件", inventoryUnit: "盒", referencePriceFen: 4_850, warningThreshold: 5, openingOnHandQuantity: 12 },
-  { skuCode: "WJ-QP-002", name: "树脂切割片 105mm", category: "切削耗材", inventoryUnit: "片", referencePriceFen: 380, warningThreshold: 6, openingOnHandQuantity: 6 },
+  { id: "demo-sku-wj-ls-001", skuCode: "WJ-LS-001", name: "304 不锈钢六角螺栓 M8×30", category: "紧固件", inventoryUnit: "盒", referencePriceFen: 4_850, warningThreshold: 20, openingOnHandQuantity: 80 },
+  { id: "demo-sku-wj-qp-004", skuCode: "WJ-QP-004", name: "树脂切割片 105mm", category: "切削耗材", inventoryUnit: "片", referencePriceFen: 380, warningThreshold: 15, openingOnHandQuantity: 52 },
   { skuCode: "WJ-ZT-003", name: "高速钢直柄麻花钻 8mm", category: "钻削工具", inventoryUnit: "支", referencePriceFen: 1_890, warningThreshold: 5, openingOnHandQuantity: 3 },
   { skuCode: "WJ-BS-004", name: "镀锌扁头自攻螺丝 M4", category: "紧固件", inventoryUnit: "盒", referencePriceFen: 1_590, warningThreshold: 5, openingOnHandQuantity: 10 },
   { skuCode: "WJ-JD-005", name: "绝缘电工胶带 黑色", category: "电工耗材", inventoryUnit: "卷", referencePriceFen: 580, warningThreshold: 2, openingOnHandQuantity: 0 },
-  { skuCode: "WJ-LM-006", name: "尼龙膨胀螺栓 M8", category: "紧固件", inventoryUnit: "包", referencePriceFen: 1_280, warningThreshold: 8, openingOnHandQuantity: 60 },
-  { skuCode: "WJ-BS-007", name: "不锈钢抱箍 32mm", category: "管件", inventoryUnit: "个", referencePriceFen: 650, warningThreshold: 8, openingOnHandQuantity: 40 },
+  { skuCode: "WJ-LM-006", name: "尼龙膨胀螺栓 M8", category: "紧固件", inventoryUnit: "包", referencePriceFen: 1_280, warningThreshold: 8, openingOnHandQuantity: 7 },
+  { skuCode: "WJ-BS-007", name: "不锈钢抱箍 32mm", category: "管件", inventoryUnit: "个", referencePriceFen: 650, warningThreshold: 8, openingOnHandQuantity: 8 },
   { skuCode: "WJ-QS-008", name: "强力砂纸 240 目", category: "研磨耗材", inventoryUnit: "张", referencePriceFen: 120, warningThreshold: 20, openingOnHandQuantity: 40 },
   { skuCode: "WJ-MP-009", name: "百叶磨片 100mm", category: "研磨耗材", inventoryUnit: "片", referencePriceFen: 850, warningThreshold: 10, openingOnHandQuantity: 50 },
   { skuCode: "WJ-BS-010", name: "玻璃胶透明 300ml", category: "密封材料", inventoryUnit: "支", referencePriceFen: 7_200, warningThreshold: 10, openingOnHandQuantity: 50 },
@@ -73,6 +74,7 @@ const skus: SkuBlueprint[] = [
 ];
 
 type CustomerBlueprint = {
+  id?: string;
   customerCode: string;
   name: string;
   contactName: string;
@@ -83,14 +85,14 @@ type CustomerBlueprint = {
 };
 
 const customers: CustomerBlueprint[] = [
-  { customerCode: "KH-0001", name: "广顺五金商行", contactName: "李海峰", phone: "138 0000 0001", address: "广东省深圳市宝安区工业路 18 号", responsibleSalesId: "demo-user-sales", paymentTermDays: 30 },
-  { customerCode: "KH-0002", name: "华南机电工程部", contactName: "周志成", phone: "138 0000 0002", address: "广东省深圳市龙华区民治大道 27 号", responsibleSalesId: "demo-user-sales", paymentTermDays: 15 },
-  { customerCode: "KH-0003", name: "明达设备维修部", contactName: "黄玉兰", phone: "138 0000 0003", address: "广东省东莞市长安镇振安路 66 号", responsibleSalesId: "demo-user-multi", paymentTermDays: 30 },
-  { customerCode: "KH-0004", name: "安成装饰材料行", contactName: "孙国强", phone: "138 0000 0004", address: "广东省佛山市禅城区季华路 32 号", responsibleSalesId: "demo-user-multi", paymentTermDays: 7 },
-  { customerCode: "KH-0005", name: "鑫源水电安装队", contactName: "马春梅", phone: "138 0000 0005", address: "广东省惠州市惠城区麦地路 19 号", responsibleSalesId: "demo-user-sales", paymentTermDays: 45 },
-  { customerCode: "KH-0006", name: "恒泰物业维修中心", contactName: "罗俊", phone: "138 0000 0006", address: "广东省深圳市南山区科技园 8 号", responsibleSalesId: "demo-user-multi", paymentTermDays: 30 },
-  { customerCode: "KH-0007", name: "联盛机械加工厂", contactName: "何志勇", phone: "138 0000 0007", address: "广东省东莞市大朗镇富民路 51 号", responsibleSalesId: "demo-user-sales", paymentTermDays: 15 },
-  { customerCode: "KH-0008", name: "德康工程服务部", contactName: "姚丽", phone: "138 0000 0008", address: "广东省深圳市龙岗区龙城大道 90 号", responsibleSalesId: "demo-user-multi", paymentTermDays: 0 },
+  { id: "demo-customer-kh-0003", customerCode: "KH-0003", name: "广顺五金商行", contactName: "李海峰", phone: "138 0000 0000", address: "广东省深圳市宝安区工业路 18 号", responsibleSalesId: "demo-user-sales", paymentTermDays: 30 },
+  { id: "demo-customer-kh-0004", customerCode: "KH-0004", name: "华南机电工程部", contactName: "周志成", phone: "138 0000 0002", address: "广东省深圳市龙华区民治大道 27 号", responsibleSalesId: "demo-user-sales", paymentTermDays: 15 },
+  { customerCode: "KH-0005", name: "明达设备维修部", contactName: "黄玉兰", phone: "138 0000 0003", address: "广东省东莞市长安镇振安路 66 号", responsibleSalesId: "demo-user-multi", paymentTermDays: 30 },
+  { customerCode: "KH-0006", name: "安成装饰材料行", contactName: "孙国强", phone: "138 0000 0004", address: "广东省佛山市禅城区季华路 32 号", responsibleSalesId: "demo-user-multi", paymentTermDays: 7 },
+  { customerCode: "KH-0007", name: "鑫源水电安装队", contactName: "马春梅", phone: "138 0000 0005", address: "广东省惠州市惠城区麦地路 19 号", responsibleSalesId: "demo-user-sales", paymentTermDays: 45 },
+  { customerCode: "KH-0008", name: "恒泰物业维修中心", contactName: "罗俊", phone: "138 0000 0006", address: "广东省深圳市南山区科技园 8 号", responsibleSalesId: "demo-user-multi", paymentTermDays: 30 },
+  { customerCode: "KH-0009", name: "联盛机械加工厂", contactName: "何志勇", phone: "138 0000 0007", address: "广东省东莞市大朗镇富民路 51 号", responsibleSalesId: "demo-user-sales", paymentTermDays: 15 },
+  { customerCode: "KH-0010", name: "德康工程服务部", contactName: "姚丽", phone: "138 0000 0008", address: "广东省深圳市龙岗区龙城大道 90 号", responsibleSalesId: "demo-user-multi", paymentTermDays: 0 },
 ];
 
 type ItemBlueprint = { sku: number; quantity: number; priceFen: number };
@@ -152,6 +154,14 @@ function pad(value: number): string {
   return String(value).padStart(2, "0");
 }
 
+function demoSkuId(index: number): string {
+  return skus[index]!.id ?? `demo-sku-${pad(index + 1)}`;
+}
+
+function demoCustomerId(index: number): string {
+  return customers[index]!.id ?? `demo-customer-${pad(index + 1)}`;
+}
+
 export async function resetDemoData(
   database: PrismaClient,
   now = new Date(),
@@ -210,7 +220,7 @@ export async function resetDemoData(
 
       await transaction.sku.createMany({
         data: skus.map((sku, index) => ({
-          id: `demo-sku-${pad(index + 1)}`,
+          id: demoSkuId(index),
           skuCode: sku.skuCode,
           name: sku.name,
           category: sku.category,
@@ -224,7 +234,7 @@ export async function resetDemoData(
       });
       await transaction.customer.createMany({
         data: customers.map((customer, index) => ({
-          id: `demo-customer-${pad(index + 1)}`,
+          id: demoCustomerId(index),
           customerCode: customer.customerCode,
           name: customer.name,
           contactName: customer.contactName,
@@ -259,7 +269,7 @@ export async function resetDemoData(
         actorName: string;
       }> = skus.map((sku, index) => ({
         id: `demo-opening-movement-${pad(index + 1)}`,
-        skuId: `demo-sku-${pad(index + 1)}`,
+        skuId: demoSkuId(index),
         movementType: "OPENING",
         onHandDelta: sku.openingOnHandQuantity,
         reservedDelta: 0,
@@ -322,7 +332,7 @@ export async function resetDemoData(
             id: orderId,
             salesOrderNumber: orderNumber,
             status: order.status,
-            customerId: `demo-customer-${pad(order.customer + 1)}`,
+            customerId: demoCustomerId(order.customer),
             creatorId: customer.responsibleSalesId,
             customerCodeSnapshot: customer.customerCode,
             customerNameSnapshot: customer.name,
@@ -342,7 +352,7 @@ export async function resetDemoData(
                 return {
                   id: `demo-sales-order-item-${pad(number)}-${pad(itemIndex + 1)}`,
                   position: itemIndex,
-                  skuId: `demo-sku-${pad(item.sku + 1)}`,
+                  skuId: demoSkuId(item.sku),
                   skuCodeSnapshot: sku.skuCode,
                   skuNameSnapshot: sku.name,
                   inventoryUnitSnapshot: sku.inventoryUnit,
@@ -385,7 +395,7 @@ export async function resetDemoData(
           state.reserved += item.quantity;
           movementRows.push({
             id: `demo-reservation-${pad(number)}-${pad(itemIndex + 1)}`,
-            skuId: `demo-sku-${pad(item.sku + 1)}`,
+            skuId: demoSkuId(item.sku),
             movementType: "RESERVATION",
             onHandDelta: 0,
             reservedDelta: item.quantity,
@@ -418,7 +428,7 @@ export async function resetDemoData(
             state.reserved -= item.quantity;
             movementRows.push({
               id: `demo-release-${pad(number)}-${pad(itemIndex + 1)}`,
-              skuId: `demo-sku-${pad(item.sku + 1)}`,
+              skuId: demoSkuId(item.sku),
               movementType: "RELEASE",
               onHandDelta: 0,
               reservedDelta: -item.quantity,
@@ -452,7 +462,7 @@ export async function resetDemoData(
             state.reserved -= item.quantity;
             movementRows.push({
               id: `demo-outbound-${pad(number)}-${pad(itemIndex + 1)}`,
-              skuId: `demo-sku-${pad(item.sku + 1)}`,
+              skuId: demoSkuId(item.sku),
               movementType: "OUTBOUND",
               onHandDelta: -item.quantity,
               reservedDelta: -item.quantity,
@@ -471,7 +481,7 @@ export async function resetDemoData(
 
       await transaction.inventoryBalance.createMany({
         data: inventoryState.map((state, index) => ({
-          skuId: `demo-sku-${pad(index + 1)}`,
+          skuId: demoSkuId(index),
           onHandQuantity: state.onHand,
           reservedQuantity: state.reserved,
           updatedAt: atChinaTime(0, 12),
@@ -503,7 +513,7 @@ export async function resetDemoData(
             id: `demo-receivable-${pad(number)}`,
             receivableNumber: `YS-${dateCode(order.terminalDay)}-${String(number).padStart(4, "0")}`,
             salesOrderId: `demo-sales-order-${pad(number)}`,
-            customerId: `demo-customer-${pad(order.customer + 1)}`,
+            customerId: demoCustomerId(order.customer),
             customerCodeSnapshot: customer.customerCode,
             customerNameSnapshot: customer.name,
             responsibleSalesIdSnapshot: customer.responsibleSalesId,
