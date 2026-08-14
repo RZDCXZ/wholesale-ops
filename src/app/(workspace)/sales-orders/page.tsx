@@ -11,7 +11,6 @@ import {
 import { SalesOrderCancelTrigger } from "@/components/sales-order-cancel-dialog";
 import { SalesOrderFilters as SalesOrderFilterPanel } from "@/components/sales-order-filters";
 import { SalesOrderRecordActions } from "@/components/sales-order-record-actions";
-import { ExportButton } from "@/components/export-button";
 import { chinaCalendarDayRange } from "@/lib/china-calendar";
 import { prisma } from "@/lib/db";
 import { getPageActor } from "@/lib/server-authorization";
@@ -143,12 +142,12 @@ export default async function SalesOrdersPage({
     <>
       <header className="mb-[18px] flex min-h-[58px] items-start justify-between gap-6 max-md:grid max-md:gap-3.5">
         <div><h1 className="text-[29px] leading-tight font-bold tracking-[-0.02em] max-md:text-[22px]">销售单</h1><p className="mt-1.5 text-[13px] text-[#667085]">查找销售单并判断当前履约状态和下一步动作</p></div>
-        <div className="flex items-start gap-2 max-md:grid"><ExportButton key={salesOrderExportHref(state)} href={salesOrderExportHref(state)} entityLabel="销售单" disabled={Boolean(dateError) || orderPage.total === 0} disabledMessage={dateError ?? "当前权限与筛选条件下没有可导出的销售单。"} /><Link href="/sales-orders/new" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[7px] bg-[#2563eb] px-4 text-sm font-semibold text-white hover:bg-[#1d4ed8]"><IconPlus aria-hidden size={17} />新建销售单</Link></div>
+        <Link href="/sales-orders/new" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[7px] bg-[#2563eb] px-4 text-sm font-semibold text-white hover:bg-[#1d4ed8]"><IconPlus aria-hidden size={17} />新建销售单</Link>
       </header>
       {notice ? <div role="status" className="mb-4 rounded-lg border border-[#a7d9b6] bg-[#ecfdf3] px-4 py-3 text-[13px] font-semibold text-[#027a48]">{notice}</div> : null}
       {state.outboundOn ? <div role="status" className="mb-4 flex min-h-11 items-center justify-between gap-3 rounded-lg border border-[#a8c7fa] bg-[#eff6ff] px-4 py-2 text-[13px] text-[#175cd3]"><span><strong>已启用总览下钻条件：</strong>出库日 {state.outboundOn}</span><Link href="/sales-orders" className="inline-flex min-h-11 shrink-0 items-center px-2 font-semibold">清除</Link></div> : null}
       <section className="overflow-hidden rounded-lg border border-[#e4e7ec] bg-white">
-        <SalesOrderFilterPanel state={state} responsibleOptions={responsibleOptions} canFilterResponsible={canFilterResponsible} dateError={dateError} />
+        <SalesOrderFilterPanel state={state} responsibleOptions={responsibleOptions} canFilterResponsible={canFilterResponsible} dateError={dateError} exportHref={salesOrderExportHref(state)} exportDisabled={Boolean(dateError) || orderPage.total === 0} exportDisabledMessage={dateError ?? "当前权限与筛选条件下没有可导出的销售单。"} />
 
         {orderPage.items.length === 0 ? (
           <div className="grid min-h-72 place-items-center p-6 text-center"><div><h2 className="text-base font-semibold">{dateError ? "日期筛选无效" : filtersActive ? "当前筛选无结果" : "系统暂无销售单"}</h2><p className="mt-2 text-[13px] leading-6 text-[#667085]">{dateError ? "请修正创建日期范围后重试。" : filtersActive ? "请调整编号、客户、负责人、履约状态或日期后重试。" : "销售单会连接客户、库存与后续应收；现在可以创建第一张草稿。"}</p>{filtersActive ? <Link href="/sales-orders" className="mt-4 inline-flex min-h-11 items-center rounded-[7px] border border-[#d0d5dd] px-4 text-sm font-semibold text-[#344054]">清除筛选</Link> : <Link href="/sales-orders/new" className="mt-4 inline-flex min-h-11 items-center rounded-[7px] bg-[#2563eb] px-4 text-sm font-semibold text-white">新建销售单</Link>}</div></div>

@@ -23,6 +23,21 @@ async function signIn(page: Page, email: string, expectedPath: RegExp) {
   await expect(page).toHaveURL(expectedPath);
 }
 
+async function expectExportLayout(
+  page: Page,
+  path: string,
+  viewport: { width: number; height: number },
+) {
+  await page.setViewportSize(viewport);
+  await page.goto(path);
+  await expect(
+    page.getByRole("button", { name: "导出当前筛选" }),
+  ).toBeVisible();
+  expect(
+    await page.evaluate(() => document.documentElement.scrollWidth),
+  ).toBeLessThanOrEqual(viewport.width);
+}
+
 test("下载入口使用当前会话与筛选，越权和空结果不会留下成功审计", async ({
   page,
 }) => {
@@ -73,6 +88,9 @@ test("下载入口使用当前会话与筛选，越权和空结果不会留下�
     await page.goto(
       `/sales-orders?q=${encodeURIComponent(customerName)}&status=OUTBOUND&actorId=other-user&scope=all`,
     );
+    expect(
+      await page.evaluate(() => document.documentElement.scrollWidth),
+    ).toBeLessThanOrEqual(1440);
     const downloadPromise = page.waitForEvent("download");
     await page.getByRole("button", { name: "导出当前筛选" }).click();
     const download = await downloadPromise;
@@ -146,16 +164,21 @@ test("下载入口使用当前会话与筛选，越权和空结果不会留下�
       prisma.businessAudit.count({ where: { action: "DATA_EXPORTED" } }),
     ).resolves.toBe(auditCountBeforeFailures);
 
-    await page.setViewportSize({ width: 390, height: 844 });
-    await page.goto(
+    await expectExportLayout(
+      page,
       `/sales-orders?q=${encodeURIComponent(customerName)}&status=OUTBOUND`,
+      { width: 390, height: 844 },
     );
-    await expect(
-      page.getByRole("button", { name: "导出当前筛选" }),
-    ).toBeVisible();
-    expect(
-      await page.evaluate(() => document.documentElement.scrollWidth),
-    ).toBeLessThanOrEqual(390);
+
+    for (const [email, home, path] of [
+      ["finance@example.local", /\/receivables$/, "/receivables"],
+      ["warehouse@example.local", /\/warehouse\/outbound$/, "/inventory/ledger"],
+    ] as const) {
+      await page.setViewportSize({ width: 1440, height: 1024 });
+      await signIn(page, email, home);
+      await expectExportLayout(page, path, { width: 1440, height: 1024 });
+      await expectExportLayout(page, path, { width: 390, height: 844 });
+    }
   } finally {
     await prisma.$transaction(async (transaction) => {
       await transaction.$executeRawUnsafe(

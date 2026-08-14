@@ -77,14 +77,20 @@ export class FilteredExportError extends Error {
   }
 }
 
+const exportCapabilities: Record<
+  FilteredExportRequest["kind"],
+  Capability
+> = {
+  SALES_ORDERS: "SALES_ORDERS_VIEW",
+  RECEIVABLES: "RECEIVABLES_VIEW",
+  INVENTORY_MOVEMENTS: "INVENTORY_VIEW",
+};
+
 function assertExportAccess(actor: Actor, request: FilteredExportRequest): void {
-  const capability: Capability =
-    request.kind === "SALES_ORDERS"
-      ? "SALES_ORDERS_VIEW"
-      : request.kind === "RECEIVABLES"
-        ? "RECEIVABLES_VIEW"
-        : "INVENTORY_VIEW";
-  if (authorizeCapability(actor, capability).kind !== "authorized") {
+  if (
+    authorizeCapability(actor, exportCapabilities[request.kind]).kind !==
+    "authorized"
+  ) {
     throw new FilteredExportError(
       "FORBIDDEN",
       "没有导出该类业务数据的权限。",
@@ -304,19 +310,9 @@ async function listAllSalesOrders(
   actor: Actor,
   filters: SalesOrderFilters,
 ): Promise<SalesOrderListItem[]> {
-  const firstPage = await listSalesOrdersPage(database, actor, filters, {
-    page: 1,
-    pageSize: 100,
-  });
-  const items = [...firstPage.items];
-  for (let page = 2; page <= firstPage.totalPages; page += 1) {
-    const nextPage = await listSalesOrdersPage(database, actor, filters, {
-      page,
-      pageSize: 100,
-    });
-    items.push(...nextPage.items);
-  }
-  return items;
+  return listAllPages((page) =>
+    listSalesOrdersPage(database, actor, filters, { page, pageSize: 100 }),
+  );
 }
 
 async function listAllReceivables(
@@ -325,22 +321,27 @@ async function listAllReceivables(
   filters: ReceivableFilters,
   now: Date,
 ): Promise<ReceivableListItem[]> {
-  const firstPage = await listReceivablesPage(
-    database,
-    actor,
-    filters,
-    { page: 1, pageSize: 100 },
-    now,
-  );
-  const items = [...firstPage.items];
-  for (let page = 2; page <= firstPage.totalPages; page += 1) {
-    const nextPage = await listReceivablesPage(
+  return listAllPages((page) =>
+    listReceivablesPage(
       database,
       actor,
       filters,
       { page, pageSize: 100 },
       now,
-    );
+    ),
+  );
+}
+
+async function listAllPages<T>(
+  loadPage: (page: number) => Promise<{
+    items: T[];
+    totalPages: number;
+  }>,
+): Promise<T[]> {
+  const firstPage = await loadPage(1);
+  const items = [...firstPage.items];
+  for (let page = 2; page <= firstPage.totalPages; page += 1) {
+    const nextPage = await loadPage(page);
     items.push(...nextPage.items);
   }
   return items;

@@ -175,10 +175,9 @@ export default async function ReceivablesPage({
 
   return (
     <>
-      <header className="mb-[18px] flex min-h-[58px] items-start justify-between gap-4 max-md:grid">
-        <div><h1 className="text-[29px] leading-tight font-bold tracking-[-0.02em] max-md:text-[22px]">应收</h1>
-        <p className="mt-1.5 text-[13px] text-[#667085]">识别待收款、部分收款、已结清和逾期应收</p></div>
-        <ExportButton key={receivablesExportHref(state)} href={receivablesExportHref(state)} entityLabel="应收" disabled={Boolean(dateError) || receivablePage.total === 0} disabledMessage={dateError ?? "当前权限与筛选条件下没有可导出的应收。"} />
+      <header className="mb-[18px] min-h-[58px]">
+        <h1 className="text-[29px] leading-tight font-bold tracking-[-0.02em] max-md:text-[22px]">应收</h1>
+        <p className="mt-1.5 text-[13px] text-[#667085]">识别待收款、部分收款、已结清和逾期应收</p>
       </header>
 
       {state.outstandingOnly || state.paymentRecordedOn ? (
@@ -240,9 +239,10 @@ export default async function ReceivablesPage({
             <input type="checkbox" name="overdue" value="1" defaultChecked={state.overdueOnly} className="size-4 accent-[#2563eb]" />
             仅看逾期
           </label>
-          <div className="flex gap-2 xl:justify-end">
-            <button type="submit" className="min-h-11 rounded-[7px] border border-[#d0d5dd] px-4 text-[13px] font-semibold text-[#344054]">筛选</button>
-            <Link href="/receivables" className="inline-flex min-h-11 items-center justify-center rounded-[7px] px-4 text-[13px] font-semibold text-[#475467] hover:bg-[#f2f4f7]">清除</Link>
+          <div className="flex items-start justify-between gap-3 md:col-span-2 xl:col-span-4">
+            <ExportButton key={receivablesExportHref(state)} href={receivablesExportHref(state)} entityLabel="应收" disabled={Boolean(dateError) || receivablePage.total === 0} disabledMessage={dateError ?? "当前权限与筛选条件下没有可导出的应收。"} />
+            <div className="flex gap-2"><button type="submit" className="min-h-11 rounded-[7px] border border-[#d0d5dd] px-4 text-[13px] font-semibold text-[#344054]">筛选</button>
+            <Link href="/receivables" className="inline-flex min-h-11 items-center justify-center rounded-[7px] px-4 text-[13px] font-semibold text-[#475467] hover:bg-[#f2f4f7]">清除</Link></div>
           </div>
           {dateError ? <p id="receivable-date-error" role="alert" className="text-xs font-semibold text-[#c62828] md:col-span-2 xl:col-span-4">{dateError}</p> : null}
         </form>

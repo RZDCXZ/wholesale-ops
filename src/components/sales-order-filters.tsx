@@ -4,6 +4,7 @@ import { IconFilter, IconX } from "@tabler/icons-react";
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
+import { ExportButton } from "@/components/export-button";
 import { keepFocusInDialog } from "@/lib/dialog-focus";
 
 type FilterState = {
@@ -60,11 +61,17 @@ export function SalesOrderFilters({
   responsibleOptions,
   canFilterResponsible,
   dateError,
+  exportHref,
+  exportDisabled,
+  exportDisabledMessage,
 }: {
   state: FilterState;
   responsibleOptions: Array<{ id: string; name: string }>;
   canFilterResponsible: boolean;
   dateError?: string;
+  exportHref: string;
+  exportDisabled: boolean;
+  exportDisabledMessage: string;
 }) {
   const [open, setOpen] = useState(false);
   const openButton = useRef<HTMLButtonElement | null>(null);
@@ -93,7 +100,7 @@ export function SalesOrderFilters({
     <>
       <form method="get" className="hidden items-end gap-3 border-b border-[#e4e7ec] p-3.5 md:grid md:grid-cols-2 xl:grid-cols-6">
         <FilterFields state={state} responsibleOptions={responsibleOptions} canFilterResponsible={canFilterResponsible} dateError={dateError} idPrefix="sales-order-desktop-filter" />
-        <div className="flex gap-2 md:col-span-2 xl:col-span-full xl:justify-end"><button type="submit" className="min-h-11 rounded-[7px] border border-[#d0d5dd] px-4 text-[13px] font-semibold text-[#344054]">筛选</button><Link href="/sales-orders" className="inline-flex min-h-11 items-center justify-center rounded-[7px] px-4 text-[13px] font-semibold text-[#475467] hover:bg-[#f2f4f7]">清除</Link></div>
+        <div className="flex items-start justify-between gap-3 md:col-span-2 xl:col-span-full"><ExportButton key={exportHref} href={exportHref} entityLabel="销售单" disabled={exportDisabled} disabledMessage={exportDisabledMessage} /><div className="flex gap-2"><button type="submit" className="min-h-11 rounded-[7px] border border-[#d0d5dd] px-4 text-[13px] font-semibold text-[#344054]">筛选</button><Link href="/sales-orders" className="inline-flex min-h-11 items-center justify-center rounded-[7px] px-4 text-[13px] font-semibold text-[#475467] hover:bg-[#f2f4f7]">清除</Link></div></div>
       </form>
 
       <div className="grid gap-3 border-b border-[#e4e7ec] p-3.5 md:hidden">
@@ -102,6 +109,7 @@ export function SalesOrderFilters({
           {activeConditions.length > 0 ? <Link href="/sales-orders" className="inline-flex min-h-11 items-center px-2 text-sm font-semibold text-[#475467]">清除全部</Link> : <span className="text-xs text-[#667085]">暂无筛选条件</span>}
         </div>
         {activeConditions.length > 0 ? <div aria-label="已启用筛选条件" className="flex flex-wrap gap-2">{activeConditions.map((condition) => <span key={condition} className="rounded-full border border-[#a8c7fa] bg-[#eff6ff] px-2.5 py-1 text-xs font-semibold text-[#175cd3]">{condition}</span>)}</div> : null}
+        <ExportButton key={exportHref} href={exportHref} entityLabel="销售单" disabled={exportDisabled} disabledMessage={exportDisabledMessage} />
       </div>
 
       {open ? (
