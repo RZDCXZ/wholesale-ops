@@ -252,6 +252,46 @@ describe("演示数据命令", () => {
     });
   });
 
+  it("当天业务事件不会晚于演示重置时刻", async () => {
+    await execFileAsync("pnpm", ["demo:reset", "--", "--yes"], {
+      cwd: process.cwd(),
+      env: {
+        ...process.env,
+        DATABASE_URL: databaseUrl,
+        BETTER_AUTH_URL: "http://localhost:3000",
+        BETTER_AUTH_SECRET: "test-secret-at-least-32-characters-long",
+        WHOLESALE_OPS_DEMO_NOW: demoNow.toISOString(),
+      },
+    });
+    const [todayOrder, todayReceivable, reversedReceivable] = await Promise.all([
+      getSalesOrderDetail(prisma, owner, "demo-sales-order-17"),
+      getReceivableDetail(prisma, owner, "demo-receivable-17", demoNow),
+      getReceivableDetail(prisma, owner, "demo-receivable-08", demoNow),
+    ]);
+    if (
+      todayReceivable.visibility !== "financial" ||
+      reversedReceivable.visibility !== "financial"
+    ) {
+      throw new Error("老板应能读取演示应收的财务时间线。");
+    }
+    const eventTimes = [
+      todayOrder.createdAt,
+      todayOrder.updatedAt,
+      todayOrder.outbound!.occurredAt,
+      todayReceivable.outboundAt,
+      ...todayReceivable.payments.flatMap((payment) => [
+        payment.recordedAt,
+        ...(payment.reversal ? [payment.reversal.reversedAt] : []),
+      ]),
+      ...reversedReceivable.payments.flatMap((payment) => [
+        payment.recordedAt,
+        ...(payment.reversal ? [payment.reversal.reversedAt] : []),
+      ]),
+    ];
+
+    expect(eventTimes.every((eventTime) => eventTime <= demoNow)).toBe(true);
+  });
+
   it("从空数据库初始化后演示老板可以登录", async () => {
     await prisma.$executeRawUnsafe("DROP SCHEMA public CASCADE");
     await prisma.$executeRawUnsafe("CREATE SCHEMA public");

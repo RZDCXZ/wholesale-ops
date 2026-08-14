@@ -29,49 +29,69 @@ const accounts: Array<{
   { id: "demo-user-multi", name: "赵磊", email: "multi@example.local", roles: ["SALES", "WAREHOUSE"] },
 ];
 
-const skus = [
-  ["WJ-LS-001", "304 不锈钢六角螺栓 M8×30", "紧固件", "盒", 4_850, 5, 12],
-  ["WJ-QP-002", "树脂切割片 105mm", "切削耗材", "片", 380, 6, 6],
-  ["WJ-ZT-003", "高速钢直柄麻花钻 8mm", "钻削工具", "支", 1_890, 5, 3],
-  ["WJ-BS-004", "镀锌扁头自攻螺丝 M4", "紧固件", "盒", 1_590, 5, 10],
-  ["WJ-JD-005", "绝缘电工胶带 黑色", "电工耗材", "卷", 580, 2, 0],
-  ["WJ-LM-006", "尼龙膨胀螺栓 M8", "紧固件", "包", 1_280, 8, 60],
-  ["WJ-BS-007", "不锈钢抱箍 32mm", "管件", "个", 650, 8, 40],
-  ["WJ-QS-008", "强力砂纸 240 目", "研磨耗材", "张", 120, 20, 40],
-  ["WJ-MP-009", "百叶磨片 100mm", "研磨耗材", "片", 850, 10, 50],
-  ["WJ-BS-010", "玻璃胶透明 300ml", "密封材料", "支", 7_200, 10, 50],
-  ["WJ-GJ-011", "高强度结构胶 50ml", "胶粘剂", "支", 1_500, 8, 50],
-  ["WJ-DL-012", "通用断路器 2P 32A", "电工耗材", "个", 2_600, 6, 50],
-  ["WJ-BS-013", "活动扳手 10 英寸", "手动工具", "把", 12_500, 5, 50],
-  ["WJ-ST-014", "生料带 20m", "密封材料", "卷", 980, 15, 50],
-  ["WJ-ZJ-015", "重型角码 50mm", "五金配件", "个", 4_350, 8, 50],
-  ["WJ-KG-016", "明装单控开关", "电工耗材", "个", 2_150, 8, 50],
-  ["WJ-LD-017", "LED 球泡 12W", "照明", "只", 1_150, 10, 50],
-  ["WJ-SL-018", "塑料扎带 4×200mm", "五金配件", "包", 3_900, 12, 50],
-  ["WJ-FH-019", "防护眼镜透明款", "劳保用品", "副", 5_250, 6, 50],
-  ["WJ-ST-020", "丁腈涂层手套", "劳保用品", "双", 1_750, 10, 50],
-  ["WJ-GG-021", "镀锌钢管卡 25mm", "管件", "个", 680, 10, 40],
-  ["WJ-DX-022", "阻燃电线 2.5mm²", "电工耗材", "卷", 18_900, 5, 40],
-  ["WJ-GP-023", "PVC 给水管 20mm", "管件", "根", 1_450, 10, 40],
-  ["WJ-ML-024", "木工锯片 7 英寸", "切削耗材", "片", 9_800, 5, 40],
-  ["WJ-TC-025", "陶瓷钻头 6mm", "钻削工具", "支", 2_350, 8, 40],
-  ["WJ-HJ-026", "焊锡丝 0.8mm", "焊接耗材", "卷", 6_600, 6, 40],
-  ["WJ-YG-027", "液压管卡 16mm", "管件", "个", 920, 10, 40],
-  ["WJ-CT-028", "磁性十字批头", "手动工具", "支", 780, 12, 40],
-  ["WJ-FX-029", "防锈润滑剂 450ml", "维护耗材", "罐", 2_900, 8, 40],
-  ["WJ-GZ-030", "工业擦拭纸", "清洁耗材", "卷", 3_200, 8, 40],
-] as const;
+type SkuBlueprint = {
+  skuCode: string;
+  name: string;
+  category: string;
+  inventoryUnit: string;
+  referencePriceFen: number;
+  warningThreshold: number;
+  openingOnHandQuantity: number;
+};
 
-const customers = [
-  ["KH-0001", "广顺五金商行", "李海峰", "138 0000 0001", "广东省深圳市宝安区工业路 18 号", "demo-user-sales", 30],
-  ["KH-0002", "华南机电工程部", "周志成", "138 0000 0002", "广东省深圳市龙华区民治大道 27 号", "demo-user-sales", 15],
-  ["KH-0003", "明达设备维修部", "黄玉兰", "138 0000 0003", "广东省东莞市长安镇振安路 66 号", "demo-user-multi", 30],
-  ["KH-0004", "安成装饰材料行", "孙国强", "138 0000 0004", "广东省佛山市禅城区季华路 32 号", "demo-user-multi", 7],
-  ["KH-0005", "鑫源水电安装队", "马春梅", "138 0000 0005", "广东省惠州市惠城区麦地路 19 号", "demo-user-sales", 45],
-  ["KH-0006", "恒泰物业维修中心", "罗俊", "138 0000 0006", "广东省深圳市南山区科技园 8 号", "demo-user-multi", 30],
-  ["KH-0007", "联盛机械加工厂", "何志勇", "138 0000 0007", "广东省东莞市大朗镇富民路 51 号", "demo-user-sales", 15],
-  ["KH-0008", "德康工程服务部", "姚丽", "138 0000 0008", "广东省深圳市龙岗区龙城大道 90 号", "demo-user-multi", 0],
-] as const;
+const skus: SkuBlueprint[] = [
+  { skuCode: "WJ-LS-001", name: "304 不锈钢六角螺栓 M8×30", category: "紧固件", inventoryUnit: "盒", referencePriceFen: 4_850, warningThreshold: 5, openingOnHandQuantity: 12 },
+  { skuCode: "WJ-QP-002", name: "树脂切割片 105mm", category: "切削耗材", inventoryUnit: "片", referencePriceFen: 380, warningThreshold: 6, openingOnHandQuantity: 6 },
+  { skuCode: "WJ-ZT-003", name: "高速钢直柄麻花钻 8mm", category: "钻削工具", inventoryUnit: "支", referencePriceFen: 1_890, warningThreshold: 5, openingOnHandQuantity: 3 },
+  { skuCode: "WJ-BS-004", name: "镀锌扁头自攻螺丝 M4", category: "紧固件", inventoryUnit: "盒", referencePriceFen: 1_590, warningThreshold: 5, openingOnHandQuantity: 10 },
+  { skuCode: "WJ-JD-005", name: "绝缘电工胶带 黑色", category: "电工耗材", inventoryUnit: "卷", referencePriceFen: 580, warningThreshold: 2, openingOnHandQuantity: 0 },
+  { skuCode: "WJ-LM-006", name: "尼龙膨胀螺栓 M8", category: "紧固件", inventoryUnit: "包", referencePriceFen: 1_280, warningThreshold: 8, openingOnHandQuantity: 60 },
+  { skuCode: "WJ-BS-007", name: "不锈钢抱箍 32mm", category: "管件", inventoryUnit: "个", referencePriceFen: 650, warningThreshold: 8, openingOnHandQuantity: 40 },
+  { skuCode: "WJ-QS-008", name: "强力砂纸 240 目", category: "研磨耗材", inventoryUnit: "张", referencePriceFen: 120, warningThreshold: 20, openingOnHandQuantity: 40 },
+  { skuCode: "WJ-MP-009", name: "百叶磨片 100mm", category: "研磨耗材", inventoryUnit: "片", referencePriceFen: 850, warningThreshold: 10, openingOnHandQuantity: 50 },
+  { skuCode: "WJ-BS-010", name: "玻璃胶透明 300ml", category: "密封材料", inventoryUnit: "支", referencePriceFen: 7_200, warningThreshold: 10, openingOnHandQuantity: 50 },
+  { skuCode: "WJ-GJ-011", name: "高强度结构胶 50ml", category: "胶粘剂", inventoryUnit: "支", referencePriceFen: 1_500, warningThreshold: 8, openingOnHandQuantity: 50 },
+  { skuCode: "WJ-DL-012", name: "通用断路器 2P 32A", category: "电工耗材", inventoryUnit: "个", referencePriceFen: 2_600, warningThreshold: 6, openingOnHandQuantity: 50 },
+  { skuCode: "WJ-BS-013", name: "活动扳手 10 英寸", category: "手动工具", inventoryUnit: "把", referencePriceFen: 12_500, warningThreshold: 5, openingOnHandQuantity: 50 },
+  { skuCode: "WJ-ST-014", name: "生料带 20m", category: "密封材料", inventoryUnit: "卷", referencePriceFen: 980, warningThreshold: 15, openingOnHandQuantity: 50 },
+  { skuCode: "WJ-ZJ-015", name: "重型角码 50mm", category: "五金配件", inventoryUnit: "个", referencePriceFen: 4_350, warningThreshold: 8, openingOnHandQuantity: 50 },
+  { skuCode: "WJ-KG-016", name: "明装单控开关", category: "电工耗材", inventoryUnit: "个", referencePriceFen: 2_150, warningThreshold: 8, openingOnHandQuantity: 50 },
+  { skuCode: "WJ-LD-017", name: "LED 球泡 12W", category: "照明", inventoryUnit: "只", referencePriceFen: 1_150, warningThreshold: 10, openingOnHandQuantity: 50 },
+  { skuCode: "WJ-SL-018", name: "塑料扎带 4×200mm", category: "五金配件", inventoryUnit: "包", referencePriceFen: 3_900, warningThreshold: 12, openingOnHandQuantity: 50 },
+  { skuCode: "WJ-FH-019", name: "防护眼镜透明款", category: "劳保用品", inventoryUnit: "副", referencePriceFen: 5_250, warningThreshold: 6, openingOnHandQuantity: 50 },
+  { skuCode: "WJ-ST-020", name: "丁腈涂层手套", category: "劳保用品", inventoryUnit: "双", referencePriceFen: 1_750, warningThreshold: 10, openingOnHandQuantity: 50 },
+  { skuCode: "WJ-GG-021", name: "镀锌钢管卡 25mm", category: "管件", inventoryUnit: "个", referencePriceFen: 680, warningThreshold: 10, openingOnHandQuantity: 40 },
+  { skuCode: "WJ-DX-022", name: "阻燃电线 2.5mm²", category: "电工耗材", inventoryUnit: "卷", referencePriceFen: 18_900, warningThreshold: 5, openingOnHandQuantity: 40 },
+  { skuCode: "WJ-GP-023", name: "PVC 给水管 20mm", category: "管件", inventoryUnit: "根", referencePriceFen: 1_450, warningThreshold: 10, openingOnHandQuantity: 40 },
+  { skuCode: "WJ-ML-024", name: "木工锯片 7 英寸", category: "切削耗材", inventoryUnit: "片", referencePriceFen: 9_800, warningThreshold: 5, openingOnHandQuantity: 40 },
+  { skuCode: "WJ-TC-025", name: "陶瓷钻头 6mm", category: "钻削工具", inventoryUnit: "支", referencePriceFen: 2_350, warningThreshold: 8, openingOnHandQuantity: 40 },
+  { skuCode: "WJ-HJ-026", name: "焊锡丝 0.8mm", category: "焊接耗材", inventoryUnit: "卷", referencePriceFen: 6_600, warningThreshold: 6, openingOnHandQuantity: 40 },
+  { skuCode: "WJ-YG-027", name: "液压管卡 16mm", category: "管件", inventoryUnit: "个", referencePriceFen: 920, warningThreshold: 10, openingOnHandQuantity: 40 },
+  { skuCode: "WJ-CT-028", name: "磁性十字批头", category: "手动工具", inventoryUnit: "支", referencePriceFen: 780, warningThreshold: 12, openingOnHandQuantity: 40 },
+  { skuCode: "WJ-FX-029", name: "防锈润滑剂 450ml", category: "维护耗材", inventoryUnit: "罐", referencePriceFen: 2_900, warningThreshold: 8, openingOnHandQuantity: 40 },
+  { skuCode: "WJ-GZ-030", name: "工业擦拭纸", category: "清洁耗材", inventoryUnit: "卷", referencePriceFen: 3_200, warningThreshold: 8, openingOnHandQuantity: 40 },
+];
+
+type CustomerBlueprint = {
+  customerCode: string;
+  name: string;
+  contactName: string;
+  phone: string;
+  address: string;
+  responsibleSalesId: string;
+  paymentTermDays: number;
+};
+
+const customers: CustomerBlueprint[] = [
+  { customerCode: "KH-0001", name: "广顺五金商行", contactName: "李海峰", phone: "138 0000 0001", address: "广东省深圳市宝安区工业路 18 号", responsibleSalesId: "demo-user-sales", paymentTermDays: 30 },
+  { customerCode: "KH-0002", name: "华南机电工程部", contactName: "周志成", phone: "138 0000 0002", address: "广东省深圳市龙华区民治大道 27 号", responsibleSalesId: "demo-user-sales", paymentTermDays: 15 },
+  { customerCode: "KH-0003", name: "明达设备维修部", contactName: "黄玉兰", phone: "138 0000 0003", address: "广东省东莞市长安镇振安路 66 号", responsibleSalesId: "demo-user-multi", paymentTermDays: 30 },
+  { customerCode: "KH-0004", name: "安成装饰材料行", contactName: "孙国强", phone: "138 0000 0004", address: "广东省佛山市禅城区季华路 32 号", responsibleSalesId: "demo-user-multi", paymentTermDays: 7 },
+  { customerCode: "KH-0005", name: "鑫源水电安装队", contactName: "马春梅", phone: "138 0000 0005", address: "广东省惠州市惠城区麦地路 19 号", responsibleSalesId: "demo-user-sales", paymentTermDays: 45 },
+  { customerCode: "KH-0006", name: "恒泰物业维修中心", contactName: "罗俊", phone: "138 0000 0006", address: "广东省深圳市南山区科技园 8 号", responsibleSalesId: "demo-user-multi", paymentTermDays: 30 },
+  { customerCode: "KH-0007", name: "联盛机械加工厂", contactName: "何志勇", phone: "138 0000 0007", address: "广东省东莞市大朗镇富民路 51 号", responsibleSalesId: "demo-user-sales", paymentTermDays: 15 },
+  { customerCode: "KH-0008", name: "德康工程服务部", contactName: "姚丽", phone: "138 0000 0008", address: "广东省深圳市龙岗区龙城大道 90 号", responsibleSalesId: "demo-user-multi", paymentTermDays: 0 },
+];
 
 type ItemBlueprint = { sku: number; quantity: number; priceFen: number };
 type OrderBlueprint = {
@@ -104,6 +124,13 @@ const orders: OrderBlueprint[] = [
   { status: "CONFIRMED", terminalDay: 0, customer: 4, items: [{ sku: 3, quantity: 5, priceFen: 1_590 }, { sku: 5, quantity: 3, priceFen: 1_280 }] },
 ];
 
+function orderTotalAmountFen(order: OrderBlueprint): number {
+  return order.items.reduce(
+    (total, item) => total + item.quantity * item.priceFen,
+    0,
+  );
+}
+
 type PaymentPlan = {
   order: number;
   amountFen: number;
@@ -134,8 +161,12 @@ export async function resetDemoData(
   const passwordHash = await hashPassword(demoPassword);
   const calendarDate = (offset: number) => addUtcCalendarDays(today, offset);
   const dateText = (offset: number) => utcCalendarDateString(calendarDate(offset));
-  const atChinaTime = (offset: number, hour: number) =>
-    new Date(`${dateText(offset)}T${pad(hour)}:00:00.000+08:00`);
+  const atChinaTime = (offset: number, hour: number) => {
+    const candidate = new Date(
+      `${dateText(offset)}T${pad(hour)}:00:00.000+08:00`,
+    );
+    return candidate > now ? new Date(now) : candidate;
+  };
   const dateCode = (offset: number) => dateText(offset).replaceAll("-", "");
 
   await database.$transaction(
@@ -180,12 +211,12 @@ export async function resetDemoData(
       await transaction.sku.createMany({
         data: skus.map((sku, index) => ({
           id: `demo-sku-${pad(index + 1)}`,
-          skuCode: sku[0],
-          name: sku[1],
-          category: sku[2],
-          inventoryUnit: sku[3],
-          referencePriceFen: sku[4],
-          warningThreshold: sku[5],
+          skuCode: sku.skuCode,
+          name: sku.name,
+          category: sku.category,
+          inventoryUnit: sku.inventoryUnit,
+          referencePriceFen: sku.referencePriceFen,
+          warningThreshold: sku.warningThreshold,
           enabled: true,
           createdAt: atChinaTime(-60, 10),
           updatedAt: atChinaTime(0, 12),
@@ -194,13 +225,13 @@ export async function resetDemoData(
       await transaction.customer.createMany({
         data: customers.map((customer, index) => ({
           id: `demo-customer-${pad(index + 1)}`,
-          customerCode: customer[0],
-          name: customer[1],
-          contactName: customer[2],
-          phone: customer[3],
-          address: customer[4],
-          responsibleSalesId: customer[5],
-          paymentTermDays: customer[6],
+          customerCode: customer.customerCode,
+          name: customer.name,
+          contactName: customer.contactName,
+          phone: customer.phone,
+          address: customer.address,
+          responsibleSalesId: customer.responsibleSalesId,
+          paymentTermDays: customer.paymentTermDays,
           enabled: true,
           createdAt: atChinaTime(-55 + index, 10),
           updatedAt: atChinaTime(-55 + index, 10),
@@ -208,7 +239,7 @@ export async function resetDemoData(
       });
 
       const inventoryState = skus.map((sku) => ({
-        onHand: sku[6],
+        onHand: sku.openingOnHandQuantity,
         reserved: 0,
       }));
       const movementRows: Array<{
@@ -230,9 +261,9 @@ export async function resetDemoData(
         id: `demo-opening-movement-${pad(index + 1)}`,
         skuId: `demo-sku-${pad(index + 1)}`,
         movementType: "OPENING",
-        onHandDelta: sku[6],
+        onHandDelta: sku.openingOnHandQuantity,
         reservedDelta: 0,
-        onHandAfter: sku[6],
+        onHandAfter: sku.openingOnHandQuantity,
         reservedAfter: 0,
         occurredAt: atChinaTime(-60, 11),
         relatedType: "DATA_IMPORT",
@@ -285,26 +316,23 @@ export async function resetDemoData(
         const createdAt = atChinaTime(order.terminalDay - (order.status === "DRAFT" ? 0 : 2), 9);
         const terminalAt = atChinaTime(order.terminalDay, 10);
         const orderNumber = `XSD-${dateCode(order.terminalDay)}-${String(number).padStart(4, "0")}`;
-        const totalAmountFen = order.items.reduce(
-          (total, item) => total + item.quantity * item.priceFen,
-          0,
-        );
+        const totalAmountFen = orderTotalAmountFen(order);
         await transaction.salesOrder.create({
           data: {
             id: orderId,
             salesOrderNumber: orderNumber,
             status: order.status,
             customerId: `demo-customer-${pad(order.customer + 1)}`,
-            creatorId: customer[5],
-            customerCodeSnapshot: customer[0],
-            customerNameSnapshot: customer[1],
-            customerContactNameSnapshot: customer[2],
-            customerPhoneSnapshot: customer[3],
-            customerAddressSnapshot: customer[4],
-            responsibleSalesIdSnapshot: customer[5],
+            creatorId: customer.responsibleSalesId,
+            customerCodeSnapshot: customer.customerCode,
+            customerNameSnapshot: customer.name,
+            customerContactNameSnapshot: customer.contactName,
+            customerPhoneSnapshot: customer.phone,
+            customerAddressSnapshot: customer.address,
+            responsibleSalesIdSnapshot: customer.responsibleSalesId,
             responsibleSalesNameSnapshot:
-              accounts.find(({ id }) => id === customer[5])!.name,
-            paymentTermDaysSnapshot: customer[6],
+              accounts.find(({ id }) => id === customer.responsibleSalesId)!.name,
+            paymentTermDaysSnapshot: customer.paymentTermDays,
             totalAmountFen,
             createdAt,
             updatedAt: terminalAt,
@@ -315,10 +343,10 @@ export async function resetDemoData(
                   id: `demo-sales-order-item-${pad(number)}-${pad(itemIndex + 1)}`,
                   position: itemIndex,
                   skuId: `demo-sku-${pad(item.sku + 1)}`,
-                  skuCodeSnapshot: sku[0],
-                  skuNameSnapshot: sku[1],
-                  inventoryUnitSnapshot: sku[3],
-                  referencePriceFenSnapshot: sku[4],
+                  skuCodeSnapshot: sku.skuCode,
+                  skuNameSnapshot: sku.name,
+                  inventoryUnitSnapshot: sku.inventoryUnit,
+                  referencePriceFenSnapshot: sku.referencePriceFen,
                   quantity: item.quantity,
                   transactionPriceFen: item.priceFen,
                   subtotalFen: item.quantity * item.priceFen,
@@ -329,8 +357,8 @@ export async function resetDemoData(
         });
         auditRows.push({
           id: `demo-sales-order-created-audit-${pad(number)}`,
-          actorId: customer[5],
-          actorName: accounts.find(({ id }) => id === customer[5])!.name,
+          actorId: customer.responsibleSalesId,
+          actorName: accounts.find(({ id }) => id === customer.responsibleSalesId)!.name,
           action: "SALES_ORDER_DRAFT_CREATED",
           objectType: "SALES_ORDER",
           objectId: orderId,
@@ -343,8 +371,8 @@ export async function resetDemoData(
         const confirmedAt = atChinaTime(order.terminalDay - 1, 10);
         auditRows.push({
           id: `demo-sales-order-confirmed-audit-${pad(number)}`,
-          actorId: customer[5],
-          actorName: accounts.find(({ id }) => id === customer[5])!.name,
+          actorId: customer.responsibleSalesId,
+          actorName: accounts.find(({ id }) => id === customer.responsibleSalesId)!.name,
           action: "SALES_ORDER_CONFIRMED",
           objectType: "SALES_ORDER",
           objectId: orderId,
@@ -367,16 +395,16 @@ export async function resetDemoData(
             relatedType: "SALES_ORDER",
             relatedId: orderId,
             relatedReference: orderNumber,
-            actorId: customer[5],
-            actorName: accounts.find(({ id }) => id === customer[5])!.name,
+            actorId: customer.responsibleSalesId,
+            actorName: accounts.find(({ id }) => id === customer.responsibleSalesId)!.name,
           });
         }
 
         if (order.status === "CANCELLED") {
           auditRows.push({
             id: `demo-sales-order-cancelled-audit-${pad(number)}`,
-            actorId: customer[5],
-            actorName: accounts.find(({ id }) => id === customer[5])!.name,
+            actorId: customer.responsibleSalesId,
+            actorName: accounts.find(({ id }) => id === customer.responsibleSalesId)!.name,
             action: "SALES_ORDER_CANCELLED",
             objectType: "SALES_ORDER",
             objectId: orderId,
@@ -400,8 +428,8 @@ export async function resetDemoData(
               relatedType: "SALES_ORDER",
               relatedId: orderId,
               relatedReference: orderNumber,
-              actorId: customer[5],
-              actorName: accounts.find(({ id }) => id === customer[5])!.name,
+              actorId: customer.responsibleSalesId,
+              actorName: accounts.find(({ id }) => id === customer.responsibleSalesId)!.name,
             });
           }
         }
@@ -455,10 +483,7 @@ export async function resetDemoData(
         if (order.status !== "OUTBOUND") continue;
         const number = orderIndex + 1;
         const customer = customers[order.customer]!;
-        const totalAmountFen = order.items.reduce(
-          (total, item) => total + item.quantity * item.priceFen,
-          0,
-        );
+        const totalAmountFen = orderTotalAmountFen(order);
         const effectivePayments = payments.filter(
           (payment) => payment.order === orderIndex && !payment.reversed,
         );
@@ -479,17 +504,17 @@ export async function resetDemoData(
             receivableNumber: `YS-${dateCode(order.terminalDay)}-${String(number).padStart(4, "0")}`,
             salesOrderId: `demo-sales-order-${pad(number)}`,
             customerId: `demo-customer-${pad(order.customer + 1)}`,
-            customerCodeSnapshot: customer[0],
-            customerNameSnapshot: customer[1],
-            responsibleSalesIdSnapshot: customer[5],
+            customerCodeSnapshot: customer.customerCode,
+            customerNameSnapshot: customer.name,
+            responsibleSalesIdSnapshot: customer.responsibleSalesId,
             originalAmountFen: totalAmountFen,
             receivedAmountFen,
             remainingAmountFen,
-            paymentTermDaysSnapshot: customer[6],
+            paymentTermDaysSnapshot: customer.paymentTermDays,
             outboundAt: atChinaTime(order.terminalDay, 10),
             dueDate: addUtcCalendarDays(
               calendarDate(order.terminalDay),
-              customer[6],
+              customer.paymentTermDays,
             ),
             status,
             createdAt: atChinaTime(order.terminalDay, 10),

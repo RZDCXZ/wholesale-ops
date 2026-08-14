@@ -6,6 +6,7 @@ import { resolve } from "node:path";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 import { PrismaClient } from "../src/generated/prisma/client";
+import { readCliOption } from "./cli-options";
 import {
   displayDatabaseTarget,
   validateLocalDatabaseTarget,
@@ -17,8 +18,7 @@ import {
 } from "./postgres-tools";
 
 function requiredOption(name: string): string {
-  const index = process.argv.indexOf(name);
-  const value = index >= 0 ? process.argv[index + 1] : undefined;
+  const value = readCliOption(process.argv, name);
   if (!value) throw new Error(`缺少 ${name} 参数。`);
   return value;
 }

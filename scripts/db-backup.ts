@@ -6,6 +6,7 @@ import { dirname, resolve } from "node:path";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 import { PrismaClient } from "../src/generated/prisma/client";
+import { readCliOption } from "./cli-options";
 import {
   displayDatabaseTarget,
   validateLocalDatabaseTarget,
@@ -13,18 +14,15 @@ import {
 } from "./local-database-target";
 import { createPostgresBackup, inspectPostgresBackup } from "./postgres-tools";
 
-function optionValue(name: string): string | undefined {
-  const index = process.argv.indexOf(name);
-  return index >= 0 ? process.argv[index + 1] : undefined;
-}
-
 function defaultBackupPath(): string {
   const timestamp = new Date().toISOString().replaceAll(":", "-").slice(0, 19);
   return resolve("backups", `wholesale-ops-${timestamp}.dump`);
 }
 
 const target = validateLocalDatabaseTarget(process.env.DATABASE_URL);
-const outputPath = resolve(optionValue("--output") ?? defaultBackupPath());
+const outputPath = resolve(
+  readCliOption(process.argv, "--output") ?? defaultBackupPath(),
+);
 const temporaryPath = `${outputPath}.tmp-${process.pid}`;
 const database = new PrismaClient({
   adapter: new PrismaPg(process.env.DATABASE_URL!),
