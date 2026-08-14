@@ -1,11 +1,9 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-
 import { PrismaPg } from "@prisma/adapter-pg";
 import { GenericContainer, type StartedTestContainer } from "testcontainers";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { PrismaClient } from "../../generated/prisma/client";
+import { runRepositoryCommand } from "../../test-support/repository-command";
 import { listBusinessAudit } from "../accounts/account-service";
 import type { Actor } from "../auth/resolve-actor";
 import {
@@ -15,8 +13,6 @@ import {
   reversePayment,
   ReceivableServiceError,
 } from "./receivable-service";
-
-const execFileAsync = promisify(execFile);
 
 const owner: Actor = {
   id: "owner-user",
@@ -64,8 +60,7 @@ describe("部分收款与自动结清", () => {
       .start();
 
     const databaseUrl = `postgresql://wholesale_ops:wholesale_ops@${container.getHost()}:${container.getMappedPort(5432)}/wholesale_ops_test?schema=public`;
-    await execFileAsync("prisma", ["migrate", "deploy"], {
-      cwd: process.cwd(),
+    await runRepositoryCommand("db:migrate", [], {
       env: { ...process.env, DATABASE_URL: databaseUrl },
     });
     prisma = new PrismaClient({ adapter: new PrismaPg(databaseUrl) });

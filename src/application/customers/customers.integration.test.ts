@@ -1,11 +1,9 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-
 import { PrismaPg } from "@prisma/adapter-pg";
 import { GenericContainer, type StartedTestContainer } from "testcontainers";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { PrismaClient } from "../../generated/prisma/client";
+import { runRepositoryCommand } from "../../test-support/repository-command";
 import type { Actor } from "../auth/resolve-actor";
 import {
   createCustomer,
@@ -19,8 +17,6 @@ import {
   reassignCustomer,
   updateCustomer,
 } from "./customer-service";
-
-const execFileAsync = promisify(execFile);
 
 const owner: Actor = {
   id: "owner-user",
@@ -74,8 +70,7 @@ describe("客户资料与负责人数据边界", () => {
       .start();
 
     const databaseUrl = `postgresql://wholesale_ops:wholesale_ops@${container.getHost()}:${container.getMappedPort(5432)}/wholesale_ops_test?schema=public`;
-    await execFileAsync("prisma", ["migrate", "deploy"], {
-      cwd: process.cwd(),
+    await runRepositoryCommand("db:migrate", [], {
       env: { ...process.env, DATABASE_URL: databaseUrl },
     });
     prisma = new PrismaClient({ adapter: new PrismaPg(databaseUrl) });

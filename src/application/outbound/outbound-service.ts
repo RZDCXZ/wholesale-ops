@@ -1,5 +1,10 @@
 import { randomUUID } from "node:crypto";
 
+import {
+  calculateReceivableDueDate,
+  calculateSettlement,
+} from "../../domain/receivable-policy";
+import { canTransitionSalesOrder } from "../../domain/sales-order-policy";
 import type { PrismaClient } from "../../generated/prisma/client";
 import { Prisma } from "../../generated/prisma/client";
 import { authorizeCapability } from "../auth/access-policy";
@@ -79,12 +84,6 @@ function chinaDate(date: Date): string {
     month: "2-digit",
     day: "2-digit",
   }).format(date);
-}
-
-function addCalendarDays(date: Date, days: number): Date {
-  const result = new Date(`${chinaDate(date)}T00:00:00.000Z`);
-  result.setUTCDate(result.getUTCDate() + days);
-  return result;
 }
 
 function receivableDateCode(date: Date): string {
@@ -264,7 +263,7 @@ export async function outboundSalesOrder(
               "销售单不存在或不可出库。",
             );
           }
-          if (order.status !== "CONFIRMED") {
+          if (!canTransitionSalesOrder(order.status, "OUTBOUND")) {
             const message =
               order.status === "DRAFT"
                 ? "销售单仍是草稿，不能出库。"
@@ -398,15 +397,13 @@ export async function outboundSalesOrder(
               customerNameSnapshot: order.customerNameSnapshot,
               responsibleSalesIdSnapshot: order.responsibleSalesIdSnapshot,
               originalAmountFen: order.totalAmountFen,
-              receivedAmountFen: 0,
-              remainingAmountFen: order.totalAmountFen,
+              ...calculateSettlement(order.totalAmountFen, 0),
               paymentTermDaysSnapshot: order.paymentTermDaysSnapshot,
               outboundAt,
-              dueDate: addCalendarDays(
+              dueDate: calculateReceivableDueDate(
                 outboundAt,
                 order.paymentTermDaysSnapshot,
               ),
-              status: "PENDING",
               createdAt: outboundAt,
             },
           });

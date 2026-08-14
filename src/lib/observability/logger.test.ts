@@ -118,7 +118,7 @@ describe("createAppLogger", () => {
     expect(output).toContain('"event":"customer.import.rejected"');
   });
 
-  it("脱敏时保留错误、日期与非循环共享结构的诊断信息", () => {
+  it("自由文本消息与错误堆栈不会绕过字段脱敏", () => {
     let output = "";
     const logger = createAppLogger({
       write(chunk: string) {
@@ -138,13 +138,17 @@ describe("createAppLogger", () => {
         };
       }
     }
-    const error = Object.assign(new Error("diagnostic-boom"), {
-      requestId: "request-safe-value",
-      token: "error-token-secret",
-    });
+    const error = Object.assign(
+      new Error("authorization=Bearer error-authorization-secret"),
+      {
+        requestId: "request-safe-value",
+        token: "error-token-secret",
+      },
+    );
 
     logger.error({
       err: error,
+      message: "password=message-password-secret",
       at: new Date("2026-08-13T00:00:00.000Z"),
       first: sharedContext,
       second: sharedContext,
@@ -152,7 +156,6 @@ describe("createAppLogger", () => {
       hiddenLibrary: new JsonLibraryContext(),
     });
 
-    expect(output).toContain("diagnostic-boom");
     expect(output).toContain('"type":"Error"');
     expect(output).toContain("2026-08-13T00:00:00.000Z");
     expect(output.match(/owner-login/g)).toHaveLength(2);
@@ -160,7 +163,7 @@ describe("createAppLogger", () => {
     expect(output).toContain("library-login");
     expect(output).toContain("to-json-safe-value");
     expect(output).not.toMatch(
-      /class-password-secret|error-token-secret|to-json-password-secret/,
+      /message-password-secret|error-authorization-secret|class-password-secret|error-token-secret|to-json-password-secret/,
     );
     expect(output).not.toContain("[Circular]");
   });

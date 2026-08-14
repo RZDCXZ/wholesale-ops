@@ -11,6 +11,7 @@ import { GenericContainer, type StartedTestContainer } from "testcontainers";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { PrismaClient } from "../../generated/prisma/client";
+import { runRepositoryCommand } from "../../test-support/repository-command";
 import { listAccounts } from "../accounts/account-service";
 import type { Actor } from "../auth/resolve-actor";
 import { listCustomersPage } from "../customers/customer-service";
@@ -71,8 +72,7 @@ function demoCommandEnvironment(databaseUrl: string): NodeJS.ProcessEnv {
 }
 
 async function resetDemoDatabase(databaseUrl: string): Promise<void> {
-  await execFileAsync("tsx", ["scripts/demo-reset.ts", "--yes"], {
-    cwd: process.cwd(),
+  await runRepositoryCommand("demo:reset", ["--yes"], {
     env: demoCommandEnvironment(databaseUrl),
   });
 }
@@ -92,8 +92,7 @@ describe("演示数据命令", () => {
       .withExposedPorts(5432)
       .start();
     databaseUrl = `postgresql://wholesale_ops:wholesale_ops@${container.getHost()}:${container.getMappedPort(5432)}/wholesale_ops?schema=public`;
-    await execFileAsync("prisma", ["migrate", "deploy"], {
-      cwd: process.cwd(),
+    await runRepositoryCommand("db:migrate", [], {
       env: { ...process.env, DATABASE_URL: databaseUrl },
     });
     prisma = new PrismaClient({ adapter: new PrismaPg(databaseUrl) });
@@ -105,8 +104,7 @@ describe("演示数据命令", () => {
   });
 
   it("拒绝重置非本机数据库目标", async () => {
-    const command = execFileAsync("tsx", ["scripts/demo-reset.ts", "--yes"], {
-      cwd: process.cwd(),
+    const command = runRepositoryCommand("demo:reset", ["--yes"], {
       env: {
         ...process.env,
         DATABASE_URL:
@@ -120,11 +118,10 @@ describe("演示数据命令", () => {
   });
 
   it("恢复命令在读取备份前拒绝非本机数据库目标", async () => {
-    const command = execFileAsync(
-      "tsx",
-      ["scripts/db-restore.ts", "--input", "/tmp/not-read.dump", "--yes"],
+    const command = runRepositoryCommand(
+      "db:restore",
+      ["--input", "/tmp/not-read.dump", "--yes"],
       {
-        cwd: process.cwd(),
         env: {
           ...process.env,
           DATABASE_URL:
@@ -421,11 +418,10 @@ describe("演示数据命令", () => {
     };
 
     try {
-      const backup = await execFileAsync(
-        "tsx",
-        ["scripts/db-backup.ts", "--output", backupPath],
+      const backup = await runRepositoryCommand(
+        "db:backup",
+        ["--output", backupPath],
         {
-          cwd: process.cwd(),
           env: commandEnvironment,
           timeout: 120_000,
         },
@@ -444,11 +440,10 @@ describe("演示数据命令", () => {
         listSalesOrdersPage(prisma, owner, {}, { page: 1, pageSize: 100 }),
       ).resolves.toMatchObject({ total: 21 });
 
-      const restore = await execFileAsync(
-        "tsx",
-        ["scripts/db-restore.ts", "--input", backupPath, "--yes"],
+      const restore = await runRepositoryCommand(
+        "db:restore",
+        ["--input", backupPath, "--yes"],
         {
-          cwd: process.cwd(),
           env: commandEnvironment,
           timeout: 120_000,
         },

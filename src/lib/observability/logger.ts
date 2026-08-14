@@ -15,6 +15,9 @@ const sensitiveFieldNames = new Set([
   "accesstoken",
   "refreshtoken",
   "idtoken",
+  "message",
+  "msg",
+  "stack",
   "row",
   "rows",
   "rawrow",
@@ -109,11 +112,11 @@ function removeSensitiveFields(
 
   if (value instanceof Error) {
     const sanitizedError = Object.assign(
-      new Error(value.message),
+      new Error(),
       sanitizedFields,
     );
     sanitizedError.name = value.name;
-    sanitizedError.stack = value.stack;
+    sanitizedError.stack = undefined;
     return sanitizedError;
   }
 

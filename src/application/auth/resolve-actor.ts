@@ -1,4 +1,6 @@
-export type Role = "OWNER" | "SALES" | "WAREHOUSE" | "FINANCE";
+import type { Role } from "../../domain/role";
+
+export type { Role } from "../../domain/role";
 
 export type SessionIdentity = {
   userId: string;

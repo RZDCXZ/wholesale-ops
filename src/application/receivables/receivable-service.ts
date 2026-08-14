@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 
+import { calculateSettlement } from "../../domain/receivable-policy";
 import {
   Prisma,
   type PaymentMethod,
@@ -700,20 +701,25 @@ export async function reversePayment(
           const receivable = await transaction.receivable.findUniqueOrThrow({
             where: { id: payment.receivableId },
           });
-          const receivedAmountFen = receivable.receivedAmountFen - payment.amountFen;
-          const remainingAmountFen =
-            receivable.originalAmountFen - receivedAmountFen;
-          if (
-            receivedAmountFen < 0 ||
-            remainingAmountFen < 0 ||
-            remainingAmountFen > receivable.originalAmountFen
-          ) {
+          let settlement: ReturnType<typeof calculateSettlement>;
+          try {
+            settlement = calculateSettlement(
+              receivable.originalAmountFen,
+              receivable.receivedAmountFen - payment.amountFen,
+            );
+          } catch {
             throw new ReceivableServiceError(
               "RECEIVABLE_CHANGED",
               "应收金额与原收款不一致，未撤销收款。请刷新后重试。",
             );
           }
-          const status = receivedAmountFen === 0 ? "PENDING" : "PARTIAL";
+          if (settlement.status === "SETTLED") {
+            throw new ReceivableServiceError(
+              "RECEIVABLE_CHANGED",
+              "应收金额与原收款不一致，未撤销收款。请刷新后重试。",
+            );
+          }
+          const { receivedAmountFen, remainingAmountFen, status } = settlement;
           const reversal = await transaction.paymentReversal.create({
             data: {
               id: reversalId,
@@ -915,11 +921,17 @@ export async function recordPayment(
             );
           }
 
-          const receivedAmountFen =
-            receivable.receivedAmountFen + parsed.amountFen;
-          const remainingAmountFen =
-            receivable.remainingAmountFen - parsed.amountFen;
-          const status = remainingAmountFen === 0 ? "SETTLED" : "PARTIAL";
+          const settlement = calculateSettlement(
+            receivable.originalAmountFen,
+            receivable.receivedAmountFen + parsed.amountFen,
+          );
+          if (settlement.status === "PENDING") {
+            throw new ReceivableServiceError(
+              "RECEIVABLE_CHANGED",
+              "应收金额刚刚发生变化，未登记收款。请刷新后重试。",
+            );
+          }
+          const { receivedAmountFen, remainingAmountFen, status } = settlement;
           const payment = await transaction.payment.create({
             data: {
               id: paymentId,

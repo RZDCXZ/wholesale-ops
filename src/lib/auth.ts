@@ -19,6 +19,9 @@ export const auth = betterAuth({
     provider: "postgresql",
     transaction: true,
   }),
+  rateLimit: {
+    enabled: environment.WHOLESALE_OPS_ACCEPTANCE !== "1",
+  },
   emailAndPassword: {
     enabled: true,
     disableSignUp: true,

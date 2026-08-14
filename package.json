@@ -17,7 +17,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "NO_PROXY=localhost,127.0.0.1 playwright test",
-    "test:acceptance": "tsx scripts/demo-reset.ts --yes && NO_PROXY=localhost,127.0.0.1 playwright test",
+    "test:acceptance": "next build && cp -R .next/static .next/standalone/.next/ && corepack pnpm@11.21.0 demo:reset -- --yes && WHOLESALE_OPS_ACCEPTANCE=1 PLAYWRIGHT_SERVER_MODE=production NO_PROXY=localhost,127.0.0.1 playwright test",
     "db:start": "docker compose up -d --wait db",
     "db:stop": "docker compose down",
     "db:backup": "tsx scripts/db-backup.ts",

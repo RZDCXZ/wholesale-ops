@@ -1,6 +1,3 @@
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
-
 import { PrismaPg } from "@prisma/adapter-pg";
 import { hashPassword } from "better-auth/crypto";
 import { GenericContainer, type StartedTestContainer } from "testcontainers";
@@ -19,8 +16,7 @@ import {
   updateAccountRoles,
 } from "./account-service";
 import { PrismaClient } from "../../generated/prisma/client";
-
-const execFileAsync = promisify(execFile);
+import { runRepositoryCommand } from "../../test-support/repository-command";
 
 const owner: Actor = {
   id: "owner-user",
@@ -45,8 +41,7 @@ describe("账号管理与业务审计", () => {
 
     const databaseUrl = `postgresql://wholesale_ops:wholesale_ops@${container.getHost()}:${container.getMappedPort(5432)}/wholesale_ops_test?schema=public`;
 
-    await execFileAsync("prisma", ["migrate", "deploy"], {
-      cwd: process.cwd(),
+    await runRepositoryCommand("db:migrate", [], {
       env: { ...process.env, DATABASE_URL: databaseUrl },
     });
 

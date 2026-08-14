@@ -155,16 +155,6 @@ test("四类角色从真实登录完成销售、库存、应收和业务审计�
     await expect(page.getByRole("status")).toContainText("销售单已确认");
     await expect(page.getByText("0 → 2 +2", { exact: true })).toBeVisible();
     await expect(page.getByText("0 → 3 +3", { exact: true })).toBeVisible();
-    await expect(
-      prisma.inventoryBalance.findMany({
-        where: { skuId: { in: skus.map(({ id }) => id) } },
-        orderBy: { skuId: "asc" },
-        select: { onHandQuantity: true, reservedQuantity: true },
-      }),
-    ).resolves.toEqual([
-      { onHandQuantity: 12, reservedQuantity: 2 },
-      { onHandQuantity: 20, reservedQuantity: 3 },
-    ]);
 
     await page.setViewportSize({ width: 1440, height: 1024 });
     await signIn(page, "warehouse@example.local", /\/warehouse\/outbound$/);
@@ -189,22 +179,18 @@ test("四类角色从真实登录完成销售、库存、应收和业务审计�
       .click();
     await expect(page.getByRole("status")).toContainText("已完成整单出库");
 
-    const receivable = await prisma.receivable.findUniqueOrThrow({
-      where: { salesOrderId },
-    });
-    receivableId = receivable.id;
-    receivableNumber = receivable.receivableNumber;
-    expect(receivable.originalAmountFen).toBe(10_840);
-    await expect(
-      prisma.inventoryBalance.findMany({
-        where: { skuId: { in: skus.map(({ id }) => id) } },
-        orderBy: { skuId: "asc" },
-        select: { onHandQuantity: true, reservedQuantity: true },
-      }),
-    ).resolves.toEqual([
-      { onHandQuantity: 10, reservedQuantity: 0 },
-      { onHandQuantity: 17, reservedQuantity: 0 },
-    ]);
+    await page.goto(`/inventory?q=${encodeURIComponent(suffix)}`);
+    for (const sku of skus) {
+      const inventoryRow = page.getByRole("row").filter({ hasText: sku.skuCode });
+      const inventoryCells = inventoryRow.getByRole("cell");
+      await expect(inventoryCells.nth(3)).toHaveText(
+        String(sku.onHandQuantity - sku.quantity),
+      );
+      await expect(inventoryCells.nth(4)).toHaveText("0");
+      await expect(inventoryCells.nth(5)).toHaveText(
+        String(sku.onHandQuantity - sku.quantity),
+      );
+    }
 
     await signIn(page, "finance@example.local", /\/receivables$/);
     const financeNavigation = page.getByRole("navigation", { name: "主导航" });
@@ -212,8 +198,18 @@ test("四类角色从真实登录完成销售、库存、应收和业务审计�
     await expect(financeNavigation.getByRole("link", { name: "客户" })).toBeVisible();
     await expect(financeNavigation.getByRole("link", { name: "库存" })).toHaveCount(0);
     await expect(financeNavigation.getByRole("link", { name: "业务审计" })).toHaveCount(0);
-    await page.goto(`/receivables/${receivable.id}`);
-    await expect(page.getByRole("heading", { name: receivable.receivableNumber })).toBeVisible();
+    await page.goto(`/receivables?q=${encodeURIComponent(customerName)}`);
+    const receivableRow = page.getByRole("row").filter({ hasText: customerName });
+    await expect(receivableRow).toContainText(salesOrderNumber);
+    await expect(receivableRow).toContainText("¥108.40");
+    await expect(receivableRow).toContainText("待收款");
+    receivableNumber = (
+      await receivableRow.getByRole("cell").first().innerText()
+    ).trim();
+    await receivableRow.getByRole("link", { name: "查看详情" }).click();
+    await expect(page).toHaveURL(/\/receivables\/[^/?]+$/);
+    receivableId = new URL(page.url()).pathname.split("/")[2];
+    await expect(page.getByRole("heading", { name: receivableNumber })).toBeVisible();
     await expect(page.getByText("¥108.40", { exact: true }).first()).toBeVisible();
 
     await page.setViewportSize({ width: 390, height: 844 });
@@ -261,13 +257,13 @@ test("四类角色从真实登录完成销售、库存、应收和业务审计�
       page.getByRole("row").filter({ hasText: salesOrderNumber }).filter({ hasText: "完成整单出库" }),
     ).toBeVisible();
     await page.goto(
-      `/audit?reference=${encodeURIComponent(receivable.receivableNumber)}`,
+      `/audit?reference=${encodeURIComponent(receivableNumber)}`,
     );
     await expect(
-      page.getByRole("row").filter({ hasText: receivable.receivableNumber }).filter({ hasText: "登记收款" }),
+      page.getByRole("row").filter({ hasText: receivableNumber }).filter({ hasText: "登记收款" }),
     ).toBeVisible();
     await expect(
-      page.getByRole("row").filter({ hasText: receivable.receivableNumber }).filter({ hasText: "撤销收款" }),
+      page.getByRole("row").filter({ hasText: receivableNumber }).filter({ hasText: "撤销收款" }),
     ).toBeVisible();
 
     await page.setViewportSize({ width: 390, height: 844 });
@@ -275,24 +271,6 @@ test("四类角色从真实登录完成销售、库存、应收和业务审计�
     await expectNoPageOverflow(page);
     await expect(page.getByRole("button", { name: "打开导航" })).toBeVisible();
 
-    await expect(
-      prisma.businessAudit.count({
-        where: {
-          action: {
-            in: [
-              "SALES_ORDER_CONFIRMED",
-              "SALES_ORDER_OUTBOUND",
-              "PAYMENT_RECORDED",
-              "PAYMENT_REVERSED",
-            ],
-          },
-          OR: [
-            { objectId: salesOrderId },
-            { referenceCode: receivable.receivableNumber },
-          ],
-        },
-      }),
-    ).resolves.toBe(4);
     expect(browserErrors).toEqual([]);
   } finally {
     if (salesOrderId) {

@@ -1,5 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
+const useProductionServer = process.env.PLAYWRIGHT_SERVER_MODE === "production";
+
 export default defineConfig({
   testDir: "./e2e",
   fullyParallel: true,
@@ -19,9 +21,11 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: "corepack pnpm@11.21.0 dev",
+    command: useProductionServer
+      ? "node .next/standalone/server.js"
+      : "corepack pnpm@11.21.0 dev",
     url: "http://127.0.0.1:3000/api/auth/get-session",
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: !process.env.CI && !useProductionServer,
     timeout: 120_000,
   },
 });

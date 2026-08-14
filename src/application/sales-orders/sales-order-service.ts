@@ -2,6 +2,12 @@ import { randomUUID } from "node:crypto";
 
 import { z } from "zod";
 
+import { snapshotPaymentTermDays } from "../../domain/receivable-policy";
+import {
+  calculateSalesOrderAmounts,
+  canManageCustomerSalesOrder,
+  canTransitionSalesOrder,
+} from "../../domain/sales-order-policy";
 import type { PrismaClient } from "../../generated/prisma/client";
 import { Prisma } from "../../generated/prisma/client";
 import { authorizeCapability } from "../auth/access-policy";
@@ -304,13 +310,6 @@ function isOwner(actor: Actor): boolean {
   return actor.roles.includes("OWNER");
 }
 
-function canManageCustomerSalesOrder(
-  actor: Actor,
-  responsibleSalesId: string,
-): boolean {
-  return isOwner(actor) || responsibleSalesId === actor.id;
-}
-
 function canCancelSalesOrderForCustomer(
   actor: Actor,
   status: SalesOrderListItem["status"],
@@ -485,23 +484,16 @@ async function resolveDraftFacts(
     );
   }
 
-  const items = input.items.map((item, position) => {
-    const sku = skuById.get(item.skuId)!;
-    const subtotalFen = item.quantity * item.transactionPrice;
-    if (!Number.isSafeInteger(subtotalFen) || subtotalFen > maxDatabaseInteger) {
-      throw new SalesOrderServiceError(
-        "AMOUNT_TOO_LARGE",
-        "销售明细小计超出允许范围。",
-        `items.${position}.transactionPrice`,
-      );
-    }
-    return { item, position, sku, subtotalFen };
-  });
-  const totalAmountFen = items.reduce(
-    (total, { subtotalFen }) => total + subtotalFen,
-    0,
-  );
-  if (!Number.isSafeInteger(totalAmountFen) || totalAmountFen > maxDatabaseInteger) {
+  let amounts: ReturnType<typeof calculateSalesOrderAmounts>;
+  try {
+    amounts = calculateSalesOrderAmounts(
+      input.items.map((item) => ({
+        quantity: item.quantity,
+        transactionPriceFen: item.transactionPrice,
+      })),
+      maxDatabaseInteger,
+    );
+  } catch {
     throw new SalesOrderServiceError(
       "AMOUNT_TOO_LARGE",
       "销售单成交金额超出允许范围。",
@@ -509,7 +501,13 @@ async function resolveDraftFacts(
     );
   }
 
-  return { customer, items, totalAmountFen };
+  const items = input.items.map((item, position) => {
+    const sku = skuById.get(item.skuId)!;
+    const subtotalFen = amounts.subtotalsFen[position]!;
+    return { item, position, sku, subtotalFen };
+  });
+
+  return { customer, items, totalAmountFen: amounts.totalAmountFen };
 }
 
 export async function createSalesOrderDraft(
@@ -548,7 +546,9 @@ export async function createSalesOrderDraft(
         customerAddressSnapshot: customer.address,
         responsibleSalesIdSnapshot: customer.responsibleSales.id,
         responsibleSalesNameSnapshot: customer.responsibleSales.name,
-        paymentTermDaysSnapshot: customer.paymentTermDays,
+        paymentTermDaysSnapshot: snapshotPaymentTermDays(
+          customer.paymentTermDays,
+        ),
         totalAmountFen,
         items: {
           create: items.map(({ item, position, sku, subtotalFen }) => ({
@@ -838,7 +838,7 @@ export async function updateSalesOrderDraft(
           : customer.responsibleSales.name,
         paymentTermDaysSnapshot: preserveCustomerSnapshot
           ? current.paymentTermDaysSnapshot
-          : customer.paymentTermDays,
+          : snapshotPaymentTermDays(customer.paymentTermDays),
         totalAmountFen,
         items: {
           deleteMany: {},
@@ -1193,7 +1193,7 @@ export async function confirmSalesOrder(
           "销售单草稿不存在或不可确认。",
         );
       }
-      if (order.status !== "DRAFT") {
+      if (!canTransitionSalesOrder(order.status, "CONFIRMED")) {
         const message =
           order.status === "CONFIRMED"
             ? "销售单已确认，不能再次确认。"
@@ -1424,7 +1424,7 @@ export async function cancelSalesOrder(
               "销售单不存在或不可取消。",
             );
           }
-          if (order.status !== "CONFIRMED") {
+          if (!canTransitionSalesOrder(order.status, "CANCELLED")) {
             const message =
               order.status === "DRAFT"
                 ? "销售单仍是草稿，不能取消。"
