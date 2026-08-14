@@ -1,16 +1,30 @@
+# Local environment and secrets
 .env
-.env.local
+.env.*
+!.env.example
+secrets/
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Framework and dependencies
 .next/
 next-env.d.ts
 node_modules/
 src/generated/prisma/
+
+# Test and build artifacts
 playwright-report/
 test-results/
 coverage/
 *.tsbuildinfo
+logs/
 *.log
 .DS_Store
 
-# Local PostgreSQL data and backups
+# Local data, backups, and uploaded files
 .data/
 backups/
+*.dump
+uploads/

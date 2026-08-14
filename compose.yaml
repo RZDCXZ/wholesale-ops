@@ -6,7 +6,7 @@ services:
       POSTGRES_USER: wholesale_ops
       POSTGRES_PASSWORD: wholesale_ops
     ports:
-      - "54329:5432"
+      - "127.0.0.1:54329:5432"
     volumes:
       - wholesale_ops_postgres:/var/lib/postgresql
     healthcheck:

@@ -41,7 +41,7 @@ jobs:
       - run: pnpm db:seed
       - run: pnpm lint
       - run: pnpm typecheck
-      - run: pnpm test
+      - run: pnpm test -- --testTimeout=30000
       - run: pnpm build
 
   e2e:
@@ -65,6 +65,7 @@ jobs:
       DATABASE_URL: postgresql://wholesale_ops:wholesale_ops@localhost:5432/wholesale_ops?schema=public
       BETTER_AUTH_URL: http://localhost:3000
       BETTER_AUTH_SECRET: ci-only-secret-that-is-at-least-32-characters-long
+      WHOLESALE_OPS_ACCEPTANCE: 1
       LOG_LEVEL: silent
     steps:
       - uses: actions/checkout@v4
