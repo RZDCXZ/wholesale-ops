@@ -7,6 +7,7 @@ import {
   listReceivablesPage,
   type ReceivableListItem,
 } from "@/application/receivables/receivable-service";
+import { ExportButton } from "@/components/export-button";
 import {
   chinaCalendarDayRange,
   parseCalendarDate,
@@ -61,6 +62,12 @@ function receivablesHref(state: ListState, targetPage = state.page): string {
   if (targetPage > 1) params.set("page", String(targetPage));
   if (state.pageSize !== 20) params.set("size", String(state.pageSize));
   return `/receivables${params.size ? `?${params}` : ""}`;
+}
+function receivablesExportHref(state: ListState): string {
+  return receivablesHref({ ...state, page: 1, pageSize: 20 }, 1).replace(
+    "/receivables",
+    "/api/exports/receivables",
+  );
 }
 
 function SettlementStatus({ status }: Pick<ReceivableListItem, "status">) {
@@ -168,9 +175,10 @@ export default async function ReceivablesPage({
 
   return (
     <>
-      <header className="mb-[18px] min-h-[58px]">
-        <h1 className="text-[29px] leading-tight font-bold tracking-[-0.02em] max-md:text-[22px]">应收</h1>
-        <p className="mt-1.5 text-[13px] text-[#667085]">识别待收款、部分收款、已结清和逾期应收</p>
+      <header className="mb-[18px] flex min-h-[58px] items-start justify-between gap-4 max-md:grid">
+        <div><h1 className="text-[29px] leading-tight font-bold tracking-[-0.02em] max-md:text-[22px]">应收</h1>
+        <p className="mt-1.5 text-[13px] text-[#667085]">识别待收款、部分收款、已结清和逾期应收</p></div>
+        <ExportButton key={receivablesExportHref(state)} href={receivablesExportHref(state)} entityLabel="应收" disabled={Boolean(dateError) || receivablePage.total === 0} disabledMessage={dateError ?? "当前权限与筛选条件下没有可导出的应收。"} />
       </header>
 
       {state.outstandingOnly || state.paymentRecordedOn ? (

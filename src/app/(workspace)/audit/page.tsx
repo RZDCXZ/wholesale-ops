@@ -38,6 +38,7 @@ const actionOptions = [
   { value: "SALES_ORDER_OUTBOUND", label: "完成整单出库" },
   { value: "PAYMENT_RECORDED", label: "登记收款" },
   { value: "PAYMENT_REVERSED", label: "撤销收款" },
+  { value: "DATA_EXPORTED", label: "导出" },
 ] as const;
 const objectOptions = [
   { value: "ACCOUNT", label: "账号" },
@@ -46,6 +47,9 @@ const objectOptions = [
   { value: "DATA_IMPORT", label: "导入记录" },
   { value: "SALES_ORDER", label: "销售单" },
   { value: "PAYMENT", label: "收款" },
+  { value: "SALES_ORDER_EXPORT", label: "销售单导出" },
+  { value: "RECEIVABLE_EXPORT", label: "应收导出" },
+  { value: "INVENTORY_MOVEMENT_EXPORT", label: "库存流水导出" },
 ] as const;
 const actionLabels = Object.fromEntries(
   actionOptions.map(({ value, label }) => [value, label]),

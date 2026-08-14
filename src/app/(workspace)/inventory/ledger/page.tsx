@@ -8,6 +8,7 @@ import {
   listInventoryMovementsPage,
   type InventoryMovementSortField,
 } from "@/application/inventory/inventory-service";
+import { ExportButton } from "@/components/export-button";
 import { prisma } from "@/lib/db";
 import {
   formatQuantity,
@@ -74,6 +75,12 @@ function ledgerHref(state: ListState): string {
   if (state.pageSize !== 20) parameters.set("size", String(state.pageSize));
   const queryString = parameters.toString();
   return queryString ? `/inventory/ledger?${queryString}` : "/inventory/ledger";
+}
+function ledgerExportHref(state: ListState): string {
+  return ledgerHref({ ...state, page: 1, pageSize: 20 }).replace(
+    "/inventory/ledger",
+    "/api/exports/inventory-movements",
+  );
 }
 
 function SortHeading({
@@ -184,7 +191,7 @@ export default async function InventoryLedgerPage({
     <>
       <header className="mb-[18px] flex min-h-[58px] items-start justify-between gap-4 max-md:grid">
         <div><p className="text-xs font-semibold text-[#2563eb]">库存 / 流水</p><h1 className="mt-2 text-[29px] leading-tight font-bold tracking-[-0.02em] max-md:text-[22px]">库存流水</h1><p className="mt-1.5 text-[13px] text-[#667085]">只追加、只读 · 期初库存与销售库存活动均可追溯</p></div>
-        <Link href={selectedSku && actor.roles.includes("OWNER") ? `/skus/${selectedSku.skuId}` : "/inventory"} className="inline-flex min-h-11 items-center justify-center rounded-[7px] border border-[#d0d5dd] bg-white px-4 text-sm font-semibold text-[#344054] hover:bg-[#f9fafb]">{selectedSku && actor.roles.includes("OWNER") ? "返回 SKU 详情" : "返回库存"}</Link>
+        <div className="flex items-start gap-2 max-md:grid"><ExportButton key={ledgerExportHref(listState)} href={ledgerExportHref(listState)} entityLabel="库存流水" disabled={Boolean(dateError) || movementsPage.total === 0} disabledMessage={dateError ?? "当前权限与筛选条件下没有可导出的库存流水。"} /><Link href={selectedSku && actor.roles.includes("OWNER") ? `/skus/${selectedSku.skuId}` : "/inventory"} className="inline-flex min-h-11 items-center justify-center rounded-[7px] border border-[#d0d5dd] bg-white px-4 text-sm font-semibold text-[#344054] hover:bg-[#f9fafb]">{selectedSku && actor.roles.includes("OWNER") ? "返回 SKU 详情" : "返回库存"}</Link></div>
       </header>
 
       {selectedSku ? <section className="mb-4 grid gap-3 rounded-lg border border-[#e4e7ec] bg-white p-4 sm:grid-cols-3"><div className="rounded-lg bg-[#f7f9fb] p-3"><span className="text-xs text-[#667085]">SKU</span><strong className="mt-1 block font-mono text-sm">{selectedSku.skuCode}</strong></div><div className="rounded-lg bg-[#f7f9fb] p-3"><span className="text-xs text-[#667085]">名称与单位</span><strong className="mt-1 block text-sm">{selectedSku.name} · {selectedSku.inventoryUnit}</strong></div><div className="rounded-lg bg-[#f7f9fb] p-3"><span className="text-xs text-[#667085]">当前三数</span><strong className="mt-1 block text-sm">现存 {formatQuantity(selectedSku.onHandQuantity)} · 预占 {formatQuantity(selectedSku.reservedQuantity)} · 可用 {formatQuantity(selectedSku.availableQuantity)}</strong></div></section> : null}
