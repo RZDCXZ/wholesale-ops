@@ -7,7 +7,7 @@ type WriteStreamLike = {
 const sensitiveFieldNames = new Set([
   "password",
   "cookie",
-  "set-cookie",
+  "setcookie",
   "authorization",
   "session",
   "token",
@@ -15,7 +15,36 @@ const sensitiveFieldNames = new Set([
   "accesstoken",
   "refreshtoken",
   "idtoken",
+  "row",
+  "rows",
+  "rawrow",
+  "rawrows",
+  "worksheetrow",
+  "worksheetrows",
+  "excelrow",
+  "excelrows",
+  "customer",
+  "customerid",
+  "customercode",
+  "customername",
+  "customercontactname",
+  "customerphone",
+  "customeraddress",
+  "customercodesnapshot",
+  "customernamesnapshot",
+  "customercontactnamesnapshot",
+  "customerphonesnapshot",
+  "customeraddresssnapshot",
+  "contactname",
+  "phone",
+  "address",
 ]);
+
+function isSensitiveFieldName(fieldName: string): boolean {
+  return sensitiveFieldNames.has(
+    fieldName.toLowerCase().replaceAll(/[^a-z0-9]/g, ""),
+  );
+}
 
 function removeSensitiveFields(
   value: unknown,
@@ -71,7 +100,7 @@ function removeSensitiveFields(
   seen.add(value);
   const sanitizedFields = Object.fromEntries(
     Object.entries(value).flatMap(([key, nestedValue]) =>
-      sensitiveFieldNames.has(key.toLowerCase())
+      isSensitiveFieldName(key)
         ? []
         : [[key, removeSensitiveFields(nestedValue, seen)]],
     ),

@@ -80,6 +80,44 @@ describe("createAppLogger", () => {
     );
   });
 
+  it("原始 Excel 行和客户敏感字段不会进入结构化日志", () => {
+    let output = "";
+    const logger = createAppLogger({
+      write(chunk: string) {
+        output += chunk;
+      },
+    });
+
+    logger.info({
+      event: "customer.import.rejected",
+      import: {
+        rawRows: [
+          {
+            customerCode: "KH-LOGGER-SECRET",
+            name: "日志测试客户",
+            contactName: "日志测试联系人",
+            phone: "139 9999 9999",
+            address: "日志测试敏感地址",
+          },
+        ],
+        rowCount: 1,
+      },
+      customer: {
+        customerCode: "KH-NESTED-SECRET",
+        customerNameSnapshot: "嵌套日志测试客户",
+        customerContactNameSnapshot: "嵌套日志测试联系人",
+        customerPhoneSnapshot: "138 8888 8888",
+        customerAddressSnapshot: "嵌套日志测试敏感地址",
+      },
+    });
+
+    expect(output).not.toMatch(
+      /KH-LOGGER-SECRET|日志测试客户|日志测试联系人|139 9999 9999|日志测试敏感地址|KH-NESTED-SECRET|嵌套日志测试客户|嵌套日志测试联系人|138 8888 8888|嵌套日志测试敏感地址/,
+    );
+    expect(output).toContain('"rowCount":1');
+    expect(output).toContain('"event":"customer.import.rejected"');
+  });
+
   it("脱敏时保留错误、日期与非循环共享结构的诊断信息", () => {
     let output = "";
     const logger = createAppLogger({

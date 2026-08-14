@@ -17,6 +17,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "NO_PROXY=localhost,127.0.0.1 playwright test",
+    "test:acceptance": "tsx scripts/demo-reset.ts --yes && NO_PROXY=localhost,127.0.0.1 playwright test",
     "db:start": "docker compose up -d --wait db",
     "db:stop": "docker compose down",
     "db:backup": "tsx scripts/db-backup.ts",

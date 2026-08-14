@@ -71,7 +71,7 @@ function demoCommandEnvironment(databaseUrl: string): NodeJS.ProcessEnv {
 }
 
 async function resetDemoDatabase(databaseUrl: string): Promise<void> {
-  await execFileAsync("pnpm", ["demo:reset", "--", "--yes"], {
+  await execFileAsync("tsx", ["scripts/demo-reset.ts", "--yes"], {
     cwd: process.cwd(),
     env: demoCommandEnvironment(databaseUrl),
   });
@@ -92,7 +92,7 @@ describe("演示数据命令", () => {
       .withExposedPorts(5432)
       .start();
     databaseUrl = `postgresql://wholesale_ops:wholesale_ops@${container.getHost()}:${container.getMappedPort(5432)}/wholesale_ops?schema=public`;
-    await execFileAsync("pnpm", ["prisma", "migrate", "deploy"], {
+    await execFileAsync("prisma", ["migrate", "deploy"], {
       cwd: process.cwd(),
       env: { ...process.env, DATABASE_URL: databaseUrl },
     });
@@ -105,7 +105,7 @@ describe("演示数据命令", () => {
   });
 
   it("拒绝重置非本机数据库目标", async () => {
-    const command = execFileAsync("pnpm", ["demo:reset", "--", "--yes"], {
+    const command = execFileAsync("tsx", ["scripts/demo-reset.ts", "--yes"], {
       cwd: process.cwd(),
       env: {
         ...process.env,
@@ -121,8 +121,8 @@ describe("演示数据命令", () => {
 
   it("恢复命令在读取备份前拒绝非本机数据库目标", async () => {
     const command = execFileAsync(
-      "pnpm",
-      ["db:restore", "--", "--input", "/tmp/not-read.dump", "--yes"],
+      "tsx",
+      ["scripts/db-restore.ts", "--input", "/tmp/not-read.dump", "--yes"],
       {
         cwd: process.cwd(),
         env: {
@@ -422,8 +422,8 @@ describe("演示数据命令", () => {
 
     try {
       const backup = await execFileAsync(
-        "pnpm",
-        ["db:backup", "--", "--output", backupPath],
+        "tsx",
+        ["scripts/db-backup.ts", "--output", backupPath],
         {
           cwd: process.cwd(),
           env: commandEnvironment,
@@ -445,8 +445,8 @@ describe("演示数据命令", () => {
       ).resolves.toMatchObject({ total: 21 });
 
       const restore = await execFileAsync(
-        "pnpm",
-        ["db:restore", "--", "--input", backupPath, "--yes"],
+        "tsx",
+        ["scripts/db-restore.ts", "--input", backupPath, "--yes"],
         {
           cwd: process.cwd(),
           env: commandEnvironment,

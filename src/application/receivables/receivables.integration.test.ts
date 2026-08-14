@@ -64,7 +64,7 @@ describe("部分收款与自动结清", () => {
       .start();
 
     const databaseUrl = `postgresql://wholesale_ops:wholesale_ops@${container.getHost()}:${container.getMappedPort(5432)}/wholesale_ops_test?schema=public`;
-    await execFileAsync("pnpm", ["prisma", "migrate", "deploy"], {
+    await execFileAsync("prisma", ["migrate", "deploy"], {
       cwd: process.cwd(),
       env: { ...process.env, DATABASE_URL: databaseUrl },
     });
