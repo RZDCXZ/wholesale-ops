@@ -11,6 +11,7 @@ import {
 import { SalesOrderCancelTrigger } from "@/components/sales-order-cancel-dialog";
 import { SalesOrderFilters as SalesOrderFilterPanel } from "@/components/sales-order-filters";
 import { SalesOrderRecordActions } from "@/components/sales-order-record-actions";
+import { chinaCalendarDayRange } from "@/lib/china-calendar";
 import { prisma } from "@/lib/db";
 import { getPageActor } from "@/lib/server-authorization";
 
@@ -22,6 +23,7 @@ type ListState = {
   responsibleSalesId: string;
   from: string;
   to: string;
+  outboundOn: string;
   page: number;
   pageSize: number;
 };
@@ -41,13 +43,6 @@ function positiveInteger(value: string): number {
   const parsed = Number(value);
   return Number.isInteger(parsed) && parsed > 0 ? parsed : 1;
 }
-function dateBoundary(value: string, boundary: "start" | "end"): Date | undefined {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined;
-  const [year, month, day] = value.split("-").map(Number);
-  const calendar = new Date(Date.UTC(year!, month! - 1, day));
-  if (calendar.getUTCFullYear() !== year || calendar.getUTCMonth() !== month! - 1 || calendar.getUTCDate() !== day) return undefined;
-  return new Date(`${value}${boundary === "start" ? "T00:00:00.000+08:00" : "T23:59:59.999+08:00"}`);
-}
 function salesOrderHref(state: ListState, targetPage = state.page): string {
   const parameters = new URLSearchParams();
   if (state.query) parameters.set("q", state.query);
@@ -55,6 +50,7 @@ function salesOrderHref(state: ListState, targetPage = state.page): string {
   if (state.responsibleSalesId) parameters.set("responsibleSalesId", state.responsibleSalesId);
   if (state.from) parameters.set("from", state.from);
   if (state.to) parameters.set("to", state.to);
+  if (state.outboundOn) parameters.set("outboundOn", state.outboundOn);
   if (targetPage > 1) parameters.set("page", String(targetPage));
   if (state.pageSize !== 20) parameters.set("size", String(state.pageSize));
   return `/sales-orders${parameters.size ? `?${parameters}` : ""}`;
@@ -91,13 +87,27 @@ export default async function SalesOrdersPage({
     responsibleSalesId: first(parameters.responsibleSalesId),
     from: first(parameters.from),
     to: first(parameters.to),
+    outboundOn: first(parameters.outboundOn),
     page: positiveInteger(first(parameters.page)),
     pageSize: [20, 50, 100].includes(requestedSize) ? requestedSize : 20,
   };
-  const createdFrom = dateBoundary(state.from, "start");
-  const createdTo = dateBoundary(state.to, "end");
+  const createdFromRange = state.from
+    ? chinaCalendarDayRange(state.from)
+    : undefined;
+  const createdToRange = state.to
+    ? chinaCalendarDayRange(state.to)
+    : undefined;
+  const outboundRange = state.outboundOn
+    ? chinaCalendarDayRange(state.outboundOn)
+    : undefined;
+  const createdFrom = createdFromRange?.start;
+  const createdTo = createdToRange?.endInclusive;
+  const outboundFrom = outboundRange?.start;
+  const outboundTo = outboundRange?.endInclusive;
   const dateError =
-    (state.from && !createdFrom) || (state.to && !createdTo)
+    (state.from && !createdFromRange) ||
+    (state.to && !createdToRange) ||
+    (state.outboundOn && !outboundRange)
       ? "请输入真实有效的日期。"
       : createdFrom && createdTo && createdFrom > createdTo
         ? "开始日期不能晚于结束日期。"
@@ -108,6 +118,8 @@ export default async function SalesOrdersPage({
     responsibleSalesId: state.responsibleSalesId || undefined,
     createdFrom,
     createdTo,
+    outboundFrom,
+    outboundTo,
   };
   const [orderPage, responsibleOptions] = await Promise.all([
     dateError
@@ -118,7 +130,7 @@ export default async function SalesOrdersPage({
   if (state.page > orderPage.totalPages) redirect(salesOrderHref(state, orderPage.totalPages));
 
   const notice = first(parameters.notice) === "deleted" ? "销售单草稿已删除，删除动作已写入业务审计。" : undefined;
-  const filtersActive = Boolean(state.query || state.status || state.responsibleSalesId || state.from || state.to);
+  const filtersActive = Boolean(state.query || state.status || state.responsibleSalesId || state.from || state.to || state.outboundOn);
   const canFilterResponsible = actor.roles.includes("OWNER");
   return (
     <>
@@ -127,6 +139,7 @@ export default async function SalesOrdersPage({
         <Link href="/sales-orders/new" className="inline-flex min-h-11 items-center justify-center gap-2 rounded-[7px] bg-[#2563eb] px-4 text-sm font-semibold text-white hover:bg-[#1d4ed8]"><IconPlus aria-hidden size={17} />新建销售单</Link>
       </header>
       {notice ? <div role="status" className="mb-4 rounded-lg border border-[#a7d9b6] bg-[#ecfdf3] px-4 py-3 text-[13px] font-semibold text-[#027a48]">{notice}</div> : null}
+      {state.outboundOn ? <div role="status" className="mb-4 flex min-h-11 items-center justify-between gap-3 rounded-lg border border-[#a8c7fa] bg-[#eff6ff] px-4 py-2 text-[13px] text-[#175cd3]"><span><strong>已启用总览下钻条件：</strong>出库日 {state.outboundOn}</span><Link href="/sales-orders" className="inline-flex min-h-11 shrink-0 items-center px-2 font-semibold">清除</Link></div> : null}
       <section className="overflow-hidden rounded-lg border border-[#e4e7ec] bg-white">
         <SalesOrderFilterPanel state={state} responsibleOptions={responsibleOptions} canFilterResponsible={canFilterResponsible} dateError={dateError} />
 

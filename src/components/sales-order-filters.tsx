@@ -12,6 +12,7 @@ type FilterState = {
   responsibleSalesId: string;
   from: string;
   to: string;
+  outboundOn: string;
   pageSize: number;
 };
 
@@ -40,6 +41,9 @@ function FilterFields({
   const dateErrorId = `${idPrefix}-date-error`;
   return (
     <>
+      {state.outboundOn ? (
+        <input type="hidden" name="outboundOn" value={state.outboundOn} />
+      ) : null}
       <label className={`${labelClass} xl:col-span-2`}><span>销售单编号或客户</span><input name="q" defaultValue={state.query} placeholder="编号或客户名称" className={controlClass} /></label>
       <label className={labelClass}><span>履约状态</span><select name="status" defaultValue={state.status} className={controlClass}><option value="">全部状态</option>{statusOptions.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}</select></label>
       {canFilterResponsible ? <label className={labelClass}><span>客户负责人</span><select name="responsibleSalesId" defaultValue={state.responsibleSalesId} className={controlClass}><option value="">全部负责人</option>{responsibleOptions.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label> : null}
@@ -82,6 +86,7 @@ export function SalesOrderFilters({
     state.responsibleSalesId ? `客户负责人：${responsibleOptions.find(({ id }) => id === state.responsibleSalesId)?.name ?? "已选择"}` : undefined,
     state.from ? `开始：${state.from}` : undefined,
     state.to ? `结束：${state.to}` : undefined,
+    state.outboundOn ? `出库日：${state.outboundOn}` : undefined,
   ].filter((condition): condition is string => Boolean(condition));
 
   return (

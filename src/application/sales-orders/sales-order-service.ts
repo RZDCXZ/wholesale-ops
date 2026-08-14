@@ -92,6 +92,8 @@ export type SalesOrderFilters = {
   status?: "DRAFT" | "CONFIRMED" | "OUTBOUND" | "CANCELLED";
   createdFrom?: Date;
   createdTo?: Date;
+  outboundFrom?: Date;
+  outboundTo?: Date;
 };
 export type SalesOrderCancellationPreviewItem = {
   skuId: string;
@@ -614,6 +616,19 @@ export async function listSalesOrdersPage(
         createdAt:
           filters.createdFrom || filters.createdTo
             ? { gte: filters.createdFrom, lte: filters.createdTo }
+            : undefined,
+      },
+      {
+        receivable:
+          filters.outboundFrom || filters.outboundTo
+            ? {
+                is: {
+                  outboundAt: {
+                    gte: filters.outboundFrom,
+                    lte: filters.outboundTo,
+                  },
+                },
+              }
             : undefined,
       },
     ],

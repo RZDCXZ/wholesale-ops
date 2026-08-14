@@ -20,8 +20,11 @@ export type ReceivableFilters = {
   responsibleSalesId?: string;
   status?: "PENDING" | "PARTIAL" | "SETTLED";
   overdueOnly?: boolean;
+  outstandingOnly?: boolean;
   dueFrom?: Date;
   dueTo?: Date;
+  paymentRecordedFrom?: Date;
+  paymentRecordedTo?: Date;
 };
 
 export type ReceivableListItem = {
@@ -232,7 +235,20 @@ function receivableWhere(
     customerId: filters.customerId,
     responsibleSalesIdSnapshot: filters.responsibleSalesId,
     status: filters.status,
-    remainingAmountFen: filters.overdueOnly ? { gt: 0 } : undefined,
+    remainingAmountFen:
+      filters.overdueOnly || filters.outstandingOnly ? { gt: 0 } : undefined,
+    payments:
+      filters.paymentRecordedFrom || filters.paymentRecordedTo
+        ? {
+            some: {
+              recordedAt: {
+                gte: filters.paymentRecordedFrom,
+                lte: filters.paymentRecordedTo,
+              },
+              reversal: { is: null },
+            },
+          }
+        : undefined,
     dueDate,
     OR: query
       ? [

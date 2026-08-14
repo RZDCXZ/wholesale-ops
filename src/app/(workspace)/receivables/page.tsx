@@ -7,6 +7,10 @@ import {
   listReceivablesPage,
   type ReceivableListItem,
 } from "@/application/receivables/receivable-service";
+import {
+  chinaCalendarDayRange,
+  parseCalendarDate,
+} from "@/lib/china-calendar";
 import { prisma } from "@/lib/db";
 import { formatMoney } from "@/lib/format-money";
 import { receivableStatusConfig } from "@/lib/receivable-display";
@@ -20,6 +24,8 @@ type ListState = {
   responsibleSalesId: string;
   status: string;
   overdueOnly: boolean;
+  outstandingOnly: boolean;
+  paymentRecordedOn: string;
   dueFrom: string;
   dueTo: string;
   page: number;
@@ -35,17 +41,6 @@ function positiveInteger(value: string): number {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1;
 }
 
-function calendarDate(value: string): Date | undefined {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return undefined;
-  const [year, month, day] = value.split("-").map(Number);
-  const date = new Date(Date.UTC(year!, month! - 1, day));
-  return date.getUTCFullYear() === year &&
-    date.getUTCMonth() === month! - 1 &&
-    date.getUTCDate() === day
-    ? date
-    : undefined;
-}
-
 function formatDate(date: Date): string {
   return date.toISOString().slice(0, 10);
 }
@@ -57,6 +52,10 @@ function receivablesHref(state: ListState, targetPage = state.page): string {
   if (state.responsibleSalesId) params.set("responsibleSalesId", state.responsibleSalesId);
   if (state.status) params.set("status", state.status);
   if (state.overdueOnly) params.set("overdue", "1");
+  if (state.outstandingOnly) params.set("outstanding", "1");
+  if (state.paymentRecordedOn) {
+    params.set("paymentRecordedOn", state.paymentRecordedOn);
+  }
   if (state.dueFrom) params.set("from", state.dueFrom);
   if (state.dueTo) params.set("to", state.dueTo);
   if (targetPage > 1) params.set("page", String(targetPage));
@@ -93,11 +92,19 @@ export default async function ReceivablesPage({
   const statusValue = first(parameters.status);
   const dueFromValue = first(parameters.from);
   const dueToValue = first(parameters.to);
-  const dueFrom = dueFromValue ? calendarDate(dueFromValue) : undefined;
-  const dueTo = dueToValue ? calendarDate(dueToValue) : undefined;
+  const paymentRecordedOnValue = first(parameters.paymentRecordedOn);
+  const dueFrom = dueFromValue ? parseCalendarDate(dueFromValue) : undefined;
+  const dueTo = dueToValue ? parseCalendarDate(dueToValue) : undefined;
+  const paymentRecordedRange = paymentRecordedOnValue
+    ? chinaCalendarDayRange(paymentRecordedOnValue)
+    : undefined;
+  const paymentRecordedFrom = paymentRecordedRange?.start;
+  const paymentRecordedTo = paymentRecordedRange?.endInclusive;
   const dateError =
-    (dueFromValue && !dueFrom) || (dueToValue && !dueTo)
-      ? "请输入真实有效的到期日期。"
+    (dueFromValue && !dueFrom) ||
+    (dueToValue && !dueTo) ||
+    (paymentRecordedOnValue && !paymentRecordedRange)
+      ? "请输入真实有效的日期。"
       : dueFrom && dueTo && dueFrom > dueTo
         ? "开始日期不能晚于结束日期。"
         : undefined;
@@ -110,6 +117,8 @@ export default async function ReceivablesPage({
       ? statusValue
       : "",
     overdueOnly: first(parameters.overdue) === "1",
+    outstandingOnly: first(parameters.outstanding) === "1",
+    paymentRecordedOn: paymentRecordedOnValue,
     dueFrom: dueFromValue,
     dueTo: dueToValue,
     page: positiveInteger(first(parameters.page)),
@@ -129,8 +138,11 @@ export default async function ReceivablesPage({
               ? (state.status as "PENDING" | "PARTIAL" | "SETTLED")
               : undefined,
             overdueOnly: state.overdueOnly,
+            outstandingOnly: state.outstandingOnly,
             dueFrom,
             dueTo,
+            paymentRecordedFrom,
+            paymentRecordedTo,
           },
           { page: state.page, pageSize: state.pageSize },
         ),
@@ -146,6 +158,8 @@ export default async function ReceivablesPage({
       state.responsibleSalesId ||
       state.status ||
       state.overdueOnly ||
+      state.outstandingOnly ||
+      state.paymentRecordedOn ||
       state.dueFrom ||
       state.dueTo,
   );
@@ -159,9 +173,23 @@ export default async function ReceivablesPage({
         <p className="mt-1.5 text-[13px] text-[#667085]">识别待收款、部分收款、已结清和逾期应收</p>
       </header>
 
+      {state.outstandingOnly || state.paymentRecordedOn ? (
+        <div role="status" className="mb-4 flex min-h-11 items-center justify-between gap-3 rounded-lg border border-[#a8c7fa] bg-[#eff6ff] px-4 py-2 text-[13px] text-[#175cd3]">
+          <span>
+            <strong>已启用总览下钻条件：</strong>
+            {state.paymentRecordedOn
+              ? `有效收款登记日 ${state.paymentRecordedOn}`
+              : "仅看未结清应收"}
+          </span>
+          <Link href="/receivables" className="inline-flex min-h-11 shrink-0 items-center px-2 font-semibold">清除</Link>
+        </div>
+      ) : null}
+
       <section className="overflow-hidden rounded-lg border border-[#e4e7ec] bg-white">
         <form method="get" className="grid items-end gap-3 border-b border-[#e4e7ec] p-3.5 md:grid-cols-2 xl:grid-cols-4">
           {state.customerId ? <input type="hidden" name="customerId" value={state.customerId} /> : null}
+          {state.outstandingOnly ? <input type="hidden" name="outstanding" value="1" /> : null}
+          {state.paymentRecordedOn ? <input type="hidden" name="paymentRecordedOn" value={state.paymentRecordedOn} /> : null}
           <label className={labelClass}>
             <span>搜索</span>
             <input name="q" defaultValue={state.query} placeholder="应收编号、销售单编号或客户" className={controlClass} />
@@ -214,7 +242,7 @@ export default async function ReceivablesPage({
         {receivablePage.items.length === 0 ? (
           <div className="grid min-h-72 place-items-center p-6 text-center">
             <div>
-              <h2 className="text-base font-semibold">{dateError ? "到期日期无效" : filtersActive ? "当前筛选无结果" : "系统暂无应收"}</h2>
+              <h2 className="text-base font-semibold">{dateError ? "日期筛选无效" : filtersActive ? "当前筛选无结果" : "系统暂无应收"}</h2>
               <p className="mt-2 text-[13px] leading-6 text-[#667085]">{dateError ? "请修正到期日期后重试。" : filtersActive ? "请调整编号、客户、结算状态、逾期或到期日条件后重试。" : "销售单完成整单出库后，会自动生成一笔经营应收。"}</p>
               {filtersActive || dateError ? <Link href="/receivables" className="mt-4 inline-flex min-h-11 items-center rounded-[7px] border border-[#d0d5dd] px-4 text-sm font-semibold text-[#344054]">清除筛选</Link> : null}
             </div>
