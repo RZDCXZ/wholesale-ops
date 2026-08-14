@@ -23,7 +23,7 @@ async function signIn(page: Page, email: string, expectedPath: RegExp) {
   await expect(page).toHaveURL(expectedPath);
 }
 
-async function expectExportLayout(
+async function expectExportButtonFitsViewport(
   page: Page,
   path: string,
   viewport: { width: number; height: number },
@@ -164,7 +164,7 @@ test("下载入口使用当前会话与筛选，越权和空结果不会留下�
       prisma.businessAudit.count({ where: { action: "DATA_EXPORTED" } }),
     ).resolves.toBe(auditCountBeforeFailures);
 
-    await expectExportLayout(
+    await expectExportButtonFitsViewport(
       page,
       `/sales-orders?q=${encodeURIComponent(customerName)}&status=OUTBOUND`,
       { width: 390, height: 844 },
@@ -176,8 +176,14 @@ test("下载入口使用当前会话与筛选，越权和空结果不会留下�
     ] as const) {
       await page.setViewportSize({ width: 1440, height: 1024 });
       await signIn(page, email, home);
-      await expectExportLayout(page, path, { width: 1440, height: 1024 });
-      await expectExportLayout(page, path, { width: 390, height: 844 });
+      await expectExportButtonFitsViewport(page, path, {
+        width: 1440,
+        height: 1024,
+      });
+      await expectExportButtonFitsViewport(page, path, {
+        width: 390,
+        height: 844,
+      });
     }
   } finally {
     await prisma.$transaction(async (transaction) => {
