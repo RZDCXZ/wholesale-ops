@@ -60,6 +60,23 @@ const finance: Actor = {
   roles: ["FINANCE"],
 };
 
+function demoCommandEnvironment(databaseUrl: string): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    DATABASE_URL: databaseUrl,
+    BETTER_AUTH_URL: "http://localhost:3000",
+    BETTER_AUTH_SECRET: "test-secret-at-least-32-characters-long",
+    WHOLESALE_OPS_DEMO_NOW: demoNow.toISOString(),
+  };
+}
+
+async function resetDemoDatabase(databaseUrl: string): Promise<void> {
+  await execFileAsync("pnpm", ["demo:reset", "--", "--yes"], {
+    cwd: process.cwd(),
+    env: demoCommandEnvironment(databaseUrl),
+  });
+}
+
 describe("演示数据命令", () => {
   let container: StartedTestContainer;
   let databaseUrl: string;
@@ -122,16 +139,7 @@ describe("演示数据命令", () => {
   });
 
   it("重置后提供完整且相对中国当天有效的经营场景", async () => {
-    await execFileAsync("pnpm", ["demo:reset", "--", "--yes"], {
-      cwd: process.cwd(),
-      env: {
-        ...process.env,
-        DATABASE_URL: databaseUrl,
-        BETTER_AUTH_URL: "http://localhost:3000",
-        BETTER_AUTH_SECRET: "test-secret-at-least-32-characters-long",
-        WHOLESALE_OPS_DEMO_NOW: demoNow.toISOString(),
-      },
-    });
+    await resetDemoDatabase(databaseUrl);
 
     const [
       accounts,
@@ -253,16 +261,7 @@ describe("演示数据命令", () => {
   });
 
   it("当天业务事件不会晚于演示重置时刻", async () => {
-    await execFileAsync("pnpm", ["demo:reset", "--", "--yes"], {
-      cwd: process.cwd(),
-      env: {
-        ...process.env,
-        DATABASE_URL: databaseUrl,
-        BETTER_AUTH_URL: "http://localhost:3000",
-        BETTER_AUTH_SECRET: "test-secret-at-least-32-characters-long",
-        WHOLESALE_OPS_DEMO_NOW: demoNow.toISOString(),
-      },
-    });
+    await resetDemoDatabase(databaseUrl);
     const [todayOrder, todayReceivable, reversedReceivable] = await Promise.all([
       getSalesOrderDetail(prisma, owner, "demo-sales-order-17"),
       getReceivableDetail(prisma, owner, "demo-receivable-17", demoNow),
@@ -301,13 +300,7 @@ describe("演示数据命令", () => {
       ["scripts/setup.mjs", "--database-already-running"],
       {
         cwd: process.cwd(),
-        env: {
-          ...process.env,
-          DATABASE_URL: databaseUrl,
-          BETTER_AUTH_URL: "http://localhost:3000",
-          BETTER_AUTH_SECRET: "test-secret-at-least-32-characters-long",
-          WHOLESALE_OPS_DEMO_NOW: demoNow.toISOString(),
-        },
+        env: demoCommandEnvironment(databaseUrl),
         timeout: 120_000,
       },
     );
@@ -351,16 +344,7 @@ describe("演示数据命令", () => {
     const snapshots = [];
 
     for (let reset = 0; reset < 3; reset += 1) {
-      await execFileAsync("pnpm", ["demo:reset", "--", "--yes"], {
-        cwd: process.cwd(),
-        env: {
-          ...process.env,
-          DATABASE_URL: databaseUrl,
-          BETTER_AUTH_URL: "http://localhost:3000",
-          BETTER_AUTH_SECRET: "test-secret-at-least-32-characters-long",
-          WHOLESALE_OPS_DEMO_NOW: demoNow.toISOString(),
-        },
-      });
+      await resetDemoDatabase(databaseUrl);
       const [accounts, inventory, salesOrders, overview] = await Promise.all([
         listAccounts(prisma, owner, {}),
         listInventoryPage(
