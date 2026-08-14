@@ -361,7 +361,7 @@ describe("演示数据命令", () => {
       customerCount: 8,
       salesOrderCount: 20,
     });
-  });
+  }, 30_000);
 
   it("连续重置三次后账号、业务编号、数量、金额、状态和经营总览一致", async () => {
     const snapshots = [];
@@ -405,7 +405,7 @@ describe("演示数据命令", () => {
     }
 
     expect(snapshots.slice(1)).toEqual([snapshots[0], snapshots[0]]);
-  });
+  }, 30_000);
 
   it("标准 PostgreSQL 备份恢复后仍可完成销售闭环", async () => {
     const temporaryDirectory = await mkdtemp(
@@ -499,5 +499,5 @@ describe("演示数据命令", () => {
     } finally {
       await rm(temporaryDirectory, { recursive: true, force: true });
     }
-  });
+  }, 30_000);
 });

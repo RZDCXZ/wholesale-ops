@@ -19,9 +19,11 @@ export const auth = betterAuth({
     provider: "postgresql",
     transaction: true,
   }),
-  rateLimit: {
-    enabled: environment.WHOLESALE_OPS_ACCEPTANCE !== "1",
-  },
+  // 仅在受控验收模式关闭；其他环境保留 Better Auth 的生产默认限流。
+  rateLimit:
+    environment.WHOLESALE_OPS_ACCEPTANCE === "1"
+      ? { enabled: false }
+      : undefined,
   emailAndPassword: {
     enabled: true,
     disableSignUp: true,
