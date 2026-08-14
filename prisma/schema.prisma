@@ -34,6 +34,14 @@ enum ReceivableStatus {
   SETTLED
 }
 
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  WECHAT
+  ALIPAY
+  OTHER
+}
+
 model User {
   id                   String              @id
   name                 String
@@ -51,6 +59,7 @@ model User {
   inventoryMovements   InventoryMovement[]
   responsibleCustomers Customer[]          @relation("CustomerResponsibleSales")
   createdSalesOrders   SalesOrder[]        @relation("SalesOrderCreator")
+  recordedPayments     Payment[]
 
   @@map("user")
 }
@@ -274,12 +283,34 @@ model Receivable {
   updatedAt                  DateTime         @updatedAt
   salesOrder                 SalesOrder       @relation(fields: [salesOrderId], references: [id], onDelete: Restrict)
   customer                   Customer         @relation(fields: [customerId], references: [id], onDelete: Restrict)
+  payments                   Payment[]
 
   @@index([customerId])
   @@index([responsibleSalesIdSnapshot])
   @@index([status, dueDate])
   @@index([outboundAt])
   @@map("receivable")
+}
+
+model Payment {
+  id              String        @id
+  receivableId    String
+  paymentDate     DateTime      @db.Date
+  amountFen       Int
+  method          PaymentMethod
+  referenceNumber String?
+  note            String?
+  idempotencyKey  String        @unique
+  recordedAt      DateTime      @default(now())
+  actorId         String
+  actorName       String
+  receivable      Receivable    @relation(fields: [receivableId], references: [id], onDelete: Restrict)
+  actor           User          @relation(fields: [actorId], references: [id], onDelete: Restrict)
+
+  @@index([receivableId, recordedAt])
+  @@index([paymentDate])
+  @@index([actorId])
+  @@map("payment")
 }
 
 model SalesOrderItem {

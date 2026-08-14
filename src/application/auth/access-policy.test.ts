@@ -21,6 +21,7 @@ const capabilitiesByRole: Record<Role, Capability[]> = {
     "INVENTORY_VIEW",
     "OUTBOUND_VIEW",
     "RECEIVABLES_VIEW",
+    "RECEIVABLES_PROGRESS_VIEW",
     "IMPORTS_MANAGE",
     "ACCOUNTS_MANAGE",
     "AUDIT_VIEW",
@@ -30,9 +31,14 @@ const capabilitiesByRole: Record<Role, Capability[]> = {
     "SKUS_VIEW",
     "CUSTOMERS_VIEW",
     "CUSTOMERS_MANAGE",
+    "RECEIVABLES_PROGRESS_VIEW",
   ],
   WAREHOUSE: ["OUTBOUND_VIEW", "INVENTORY_VIEW"],
-  FINANCE: ["RECEIVABLES_VIEW", "CUSTOMERS_VIEW"],
+  FINANCE: [
+    "RECEIVABLES_VIEW",
+    "RECEIVABLES_PROGRESS_VIEW",
+    "CUSTOMERS_VIEW",
+  ],
 };
 
 function actorWith(...actorRoles: Role[]): Actor {

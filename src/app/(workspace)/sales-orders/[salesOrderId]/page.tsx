@@ -130,6 +130,8 @@ export default async function SalesOrderDetailPage({
     authorizeCapability(actor, "INVENTORY_VIEW").kind === "authorized";
   const canViewAudit =
     authorizeCapability(actor, "AUDIT_VIEW").kind === "authorized";
+  const canManageReceivables =
+    authorizeCapability(actor, "RECEIVABLES_VIEW").kind === "authorized";
   const confirmable = {
     id: salesOrder.id,
     salesOrderNumber: salesOrder.salesOrderNumber,
@@ -341,6 +343,27 @@ export default async function SalesOrderDetailPage({
               {salesOrder.status === "CONFIRMED" ? <div className="grid grid-cols-[24px_1fr] gap-3"><span className="mt-1 size-3 justify-self-center rounded-full border-2 border-[#98a2b3] bg-white" /><div><strong>等待完整出库</strong><span className="mt-1 block text-xs text-[#667085]">下一步</span></div></div> : null}
             </div>
           </section>
+
+          {salesOrder.receivable ? (
+            <section className="rounded-lg border border-[#e4e7ec] bg-white p-5 text-[13px]">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-bold">关联应收</h2>
+                  <p className="mt-1 font-mono text-xs text-[#667085]">{salesOrder.receivable.receivableNumber}</p>
+                </div>
+                <span className={`rounded-md border px-2 py-1 text-xs font-semibold ${salesOrder.receivable.status === "SETTLED" ? "border-[#a7d9b6] bg-[#ecfdf3] text-[#027a48]" : "border-[#f0c36d] bg-[#fff8e6] text-[#8a5a00]"}`}>
+                  {salesOrder.receivable.status === "PENDING" ? "待收款" : salesOrder.receivable.status === "PARTIAL" ? "部分收款" : "已结清"}
+                </span>
+              </div>
+              <dl className="mt-4 grid grid-cols-2 gap-3">
+                <div className="rounded-lg bg-[#f7f9fb] p-3"><dt className="text-xs text-[#667085]">有效累计收款</dt><dd className="mt-1 font-semibold tabular-nums">{formatMoney(salesOrder.receivable.receivedAmountFen)}</dd></div>
+                <div className="rounded-lg bg-[#f6f9ff] p-3"><dt className="text-xs text-[#667085]">未收金额</dt><dd className="mt-1 font-semibold tabular-nums text-[#1d4ed8]">{formatMoney(salesOrder.receivable.remainingAmountFen)}</dd></div>
+              </dl>
+              <Link href={`/receivables/${encodeURIComponent(salesOrder.receivable.id)}`} className="mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-[7px] border border-[#d0d5dd] px-3 text-sm font-semibold text-[#344054] hover:bg-[#f9fafb]">
+                {canManageReceivables ? "查看应收与登记收款" : "查看收款进度"}
+              </Link>
+            </section>
+          ) : null}
 
           <section className="rounded-lg border border-[#e4e7ec] bg-white p-5 text-[13px]">
             <h2 className="text-base font-bold">客户快照</h2>

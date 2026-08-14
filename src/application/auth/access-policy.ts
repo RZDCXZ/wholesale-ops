@@ -10,6 +10,7 @@ export type Capability =
   | "INVENTORY_VIEW"
   | "OUTBOUND_VIEW"
   | "RECEIVABLES_VIEW"
+  | "RECEIVABLES_PROGRESS_VIEW"
   | "IMPORTS_MANAGE"
   | "AUDIT_VIEW"
   | "ACCOUNTS_MANAGE";
@@ -91,15 +92,21 @@ const capabilitiesByRole: Record<Role, ReadonlySet<Capability>> = {
     "CUSTOMERS_VIEW",
     "CUSTOMERS_MANAGE",
     "INVENTORY_VIEW",
+    "RECEIVABLES_PROGRESS_VIEW",
   ]),
   SALES: new Set([
     "SALES_ORDERS_VIEW",
     "SKUS_VIEW",
     "CUSTOMERS_VIEW",
     "CUSTOMERS_MANAGE",
+    "RECEIVABLES_PROGRESS_VIEW",
   ]),
   WAREHOUSE: new Set(["OUTBOUND_VIEW", "INVENTORY_VIEW"]),
-  FINANCE: new Set(["RECEIVABLES_VIEW", "CUSTOMERS_VIEW"]),
+  FINANCE: new Set([
+    "RECEIVABLES_VIEW",
+    "RECEIVABLES_PROGRESS_VIEW",
+    "CUSTOMERS_VIEW",
+  ]),
 };
 
 export type CapabilityAuthorizationResult =

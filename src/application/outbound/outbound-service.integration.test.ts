@@ -400,6 +400,18 @@ describe("整单出库", () => {
         },
       ],
     });
+    await expect(
+      getSalesOrderDetail(prisma, sales, draft.id),
+    ).resolves.toMatchObject({
+      receivable: {
+        receivableNumber: expect.stringMatching(/^YS-20260813-\d{4,}$/),
+        originalAmountFen: 108_400,
+        receivedAmountFen: 0,
+        remainingAmountFen: 108_400,
+        status: "PENDING",
+        dueDate: new Date("2026-09-12T00:00:00.000Z"),
+      },
+    });
   });
 
   it("现结销售单的应收到期日等于中国标准时间的出库日", async () => {

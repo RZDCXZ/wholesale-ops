@@ -160,12 +160,14 @@ describe("期初库存导入事务", () => {
     expect(preview.status).toBe("ready");
     if (preview.status !== "ready") throw new Error("Expected a ready preview.");
 
+    const importStartedAt = new Date(Date.now() - 1_000);
     const imported = await confirmOpeningInventoryImport(
       prisma,
       owner,
       preview.previewToken,
       tokenContext,
     );
+    const importFinishedAt = new Date(Date.now() + 1_000);
 
     await expect(listInventory(prisma, owner, {})).resolves.toEqual(
       expect.arrayContaining([
@@ -231,8 +233,8 @@ describe("期初库存导入事务", () => {
     await expect(
       listInventoryMovements(prisma, owner, {
         movementType: "OPENING",
-        dateFrom: new Date("2026-08-12T00:00:00.000Z"),
-        dateTo: new Date("2026-08-14T00:00:00.000Z"),
+        dateFrom: importStartedAt,
+        dateTo: importFinishedAt,
       }),
     ).resolves.toHaveLength(2);
     const movement = await prisma.inventoryMovement.findFirstOrThrow();

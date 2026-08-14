@@ -224,6 +224,15 @@ export type SalesOrderDetail = {
     actorName: string;
     occurredAt: Date;
   } | null;
+  receivable: {
+    id: string;
+    receivableNumber: string;
+    originalAmountFen: number;
+    receivedAmountFen: number;
+    remainingAmountFen: number;
+    status: "PENDING" | "PARTIAL" | "SETTLED";
+    dueDate: Date;
+  } | null;
   items: Array<{
     id: string;
     skuId: string;
@@ -922,6 +931,17 @@ export async function getSalesOrderDetail(
     where: { id: salesOrderId, ...salesOrderReadScope(actor) },
     include: {
       customer: { select: { responsibleSalesId: true } },
+      receivable: {
+        select: {
+          id: true,
+          receivableNumber: true,
+          originalAmountFen: true,
+          receivedAmountFen: true,
+          remainingAmountFen: true,
+          status: true,
+          dueDate: true,
+        },
+      },
       items: {
         include: { sku: { include: { inventoryBalance: true } } },
         orderBy: [{ position: "asc" }, { id: "asc" }],
@@ -1080,6 +1100,7 @@ export async function getSalesOrderDetail(
           occurredAt: outbound.occurredAt,
         }
       : null,
+    receivable: order.receivable,
     items: order.items.map((item) => {
       const onHandQuantity = item.sku.inventoryBalance?.onHandQuantity ?? 0;
       const reservedQuantity = item.sku.inventoryBalance?.reservedQuantity ?? 0;
