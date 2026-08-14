@@ -4,6 +4,9 @@ import { ensureLocalEnv } from "./ensure-env.mjs";
 
 const expectedNodeMajor = 24;
 const currentNodeMajor = Number(process.versions.node.split(".")[0]);
+const databaseAlreadyRunning = process.argv.includes(
+  "--database-already-running",
+);
 
 if (currentNodeMajor !== expectedNodeMajor) {
   throw new Error(
@@ -18,7 +21,9 @@ if (ensureLocalEnv()) {
 const run = (command, args) =>
   execFileSync(command, args, { stdio: "inherit", env: process.env });
 
-run("docker", ["compose", "up", "-d", "--wait", "db"]);
+if (!databaseAlreadyRunning) {
+  run("docker", ["compose", "up", "-d", "--wait", "db"]);
+}
 run("corepack", ["pnpm@11.21.0", "db:generate"]);
 run("corepack", ["pnpm@11.21.0", "db:migrate"]);
 run("corepack", ["pnpm@11.21.0", "db:seed"]);
