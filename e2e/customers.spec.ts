@@ -3,6 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 import "dotenv/config";
 
 import { PrismaClient } from "../src/generated/prisma/client";
+import { selectFormOption } from "./support/form-controls";
 
 const password = "demo123456";
 const databaseUrl = process.env.DATABASE_URL;
@@ -36,7 +37,7 @@ test("老板维护并转交客户后，销售数据范围立即切换", async ({
     await page.getByLabel("客户名称").fill("浏览器测试客户");
     await page.getByLabel("联系人").fill("测试联系人");
     await page.getByLabel("电话").fill("138 0000 0011");
-    await page.getByLabel("客户负责人").selectOption({ label: "陈敏" });
+    await selectFormOption(page, page.getByLabel("客户负责人"), "陈敏");
     await page.getByLabel("地址").fill("广东省深圳市测试路 11 号");
     await page.getByRole("button", { name: "创建客户" }).click();
 
@@ -57,7 +58,7 @@ test("老板维护并转交客户后，销售数据范围立即切换", async ({
     await page.getByRole("button", { name: "关闭" }).click();
     await expect(reassignButton).toBeFocused();
     await reassignButton.click();
-    await page.getByLabel("新的客户负责人").selectOption({ label: "赵磊" });
+    await selectFormOption(page, page.getByLabel("新的客户负责人"), "赵磊");
     await page.getByRole("button", { name: "确认转交" }).click();
     await expect(page.getByText("客户负责人已调整，服务端数据范围立即生效。", { exact: true })).toBeVisible();
 
@@ -98,7 +99,7 @@ test("客户 Server Action 在提交时重新校验当前会话", async ({ page 
   await page.getByLabel("客户名称").fill("越权测试客户");
   await page.getByLabel("联系人").fill("测试联系人");
   await page.getByLabel("电话").fill("138 0000 0012");
-  await page.getByLabel("客户负责人").selectOption({ label: "陈敏" });
+  await selectFormOption(page, page.getByLabel("客户负责人"), "陈敏");
   await page.getByLabel("地址").fill("广东省深圳市越权测试路 12 号");
 
   await switchSession(page, "finance@example.local");

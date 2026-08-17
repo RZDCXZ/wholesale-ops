@@ -5,6 +5,7 @@ import { expect, test, type Page } from "@playwright/test";
 import "dotenv/config";
 
 import { PrismaClient } from "../src/generated/prisma/client";
+import { selectFormOption } from "./support/form-controls";
 
 const password = "demo123456";
 const databaseUrl = process.env.DATABASE_URL;
@@ -122,13 +123,27 @@ test("四类角色从真实登录完成销售、库存、应收和业务审计�
 
     await page.getByRole("link", { name: "新建销售单" }).first().click();
     await expect(page).toHaveURL(/\/sales-orders\/new$/);
-    await page.getByLabel("客户", { exact: true }).selectOption(customerId);
+    await selectFormOption(
+      page,
+      page.getByLabel("客户", { exact: true }),
+      `E2E-KH-${suffix} · ${customerName}`,
+    );
     const firstItem = page.getByTestId("sales-order-item").nth(0);
-    await firstItem.getByLabel("SKU", { exact: true }).selectOption(skus[0]!.id);
+    await firstItem.getByLabel("搜索 SKU").fill(skus[0]!.skuCode);
+    await selectFormOption(
+      page,
+      firstItem.getByLabel("SKU", { exact: true }),
+      `${skus[0]!.skuCode} · ${skus[0]!.name}`,
+    );
     await firstItem.getByLabel("数量").fill(String(skus[0]!.quantity));
     await page.getByRole("button", { name: "添加明细" }).click();
     const secondItem = page.getByTestId("sales-order-item").nth(1);
-    await secondItem.getByLabel("SKU", { exact: true }).selectOption(skus[1]!.id);
+    await secondItem.getByLabel("搜索 SKU").fill(skus[1]!.skuCode);
+    await selectFormOption(
+      page,
+      secondItem.getByLabel("SKU", { exact: true }),
+      `${skus[1]!.skuCode} · ${skus[1]!.name}`,
+    );
     await secondItem.getByLabel("数量").fill(String(skus[1]!.quantity));
     await expect(page.getByText("¥108.40", { exact: true })).toBeVisible();
     await page.getByRole("button", { name: "保存草稿" }).click();

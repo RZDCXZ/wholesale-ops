@@ -3,6 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 import "dotenv/config";
 
 import { PrismaClient } from "../src/generated/prisma/client";
+import { selectFormOption } from "./support/form-controls";
 
 const password = "demo123456";
 const databaseUrl = process.env.DATABASE_URL;
@@ -42,19 +43,41 @@ test("销售创建、校验、编辑并删除库存不足的多 SKU 草稿", asy
     await signIn(page, "sales@example.local", /\/sales-orders$/);
     await page.getByRole("link", { name: "新建销售单" }).first().click();
     await expect(page).toHaveURL(/\/sales-orders\/new$/);
-    await page.getByLabel("客户").selectOption("demo-customer-kh-0003");
+    await selectFormOption(
+      page,
+      page.getByLabel("客户"),
+      "KH-0003 · 广顺五金商行",
+    );
     await expect(page.getByText("李海峰 · 138 0000 0000", { exact: true })).toBeVisible();
     await expect(page.getByText("30 天", { exact: true })).toBeVisible();
 
     const firstItem = page.getByTestId("sales-order-item").nth(0);
-    await firstItem.getByLabel("SKU", { exact: true }).selectOption("demo-sku-wj-ls-001");
+    await firstItem.getByLabel("搜索 SKU").fill("WJ-LS-001");
+    await selectFormOption(
+      page,
+      firstItem.getByLabel("SKU", { exact: true }),
+      "WJ-LS-001 · 304 不锈钢六角螺栓 M8×30",
+    );
     await firstItem.getByLabel("数量").fill("20");
     await expect(firstItem.getByLabel("成交价")).toHaveValue("48.50");
     await page.getByRole("button", { name: "添加明细" }).click();
     const secondItem = page.getByTestId("sales-order-item").nth(1);
     await secondItem.getByLabel("搜索 SKU").fill("切割片");
-    await expect(secondItem.getByLabel("SKU", { exact: true }).locator("option")).toHaveCount(2);
-    await secondItem.getByLabel("SKU", { exact: true }).selectOption("demo-sku-wj-qp-004");
+    const secondSkuSelect = secondItem.getByLabel("SKU", { exact: true });
+    await secondSkuSelect.click();
+    const skuListbox = page.getByRole("listbox").filter({ visible: true });
+    await expect(skuListbox).toHaveCount(1);
+    const cuttingDiscOption = skuListbox.getByRole("option", {
+      name: "WJ-QP-004 · 树脂切割片 105mm",
+    });
+    await expect(cuttingDiscOption).toBeVisible();
+    await expect(
+      skuListbox.getByRole("option", {
+        name: "WJ-LS-001 · 304 不锈钢六角螺栓 M8×30",
+      }),
+    ).toHaveCount(0);
+    await cuttingDiscOption.click();
+    await expect(secondSkuSelect).toContainText("WJ-QP-004 · 树脂切割片 105mm");
     await secondItem.getByLabel("数量").fill("70");
     await expect(secondItem.getByLabel("成交价")).toHaveValue("3.80");
     await expect(secondItem.getByText(/当前可用量 50 片/)).toBeVisible();
@@ -173,13 +196,27 @@ test("销售从详情确认后填写原因取消销售单，并看到预占释�
     });
     await signIn(page, "sales@example.local", /\/sales-orders$/);
     await page.goto("/sales-orders/new");
-    await page.getByLabel("客户").selectOption("demo-customer-kh-0003");
+    await selectFormOption(
+      page,
+      page.getByLabel("客户"),
+      "KH-0003 · 广顺五金商行",
+    );
     const firstItem = page.getByTestId("sales-order-item").nth(0);
-    await firstItem.getByLabel("SKU", { exact: true }).selectOption(testSkus[0]!.id);
+    await firstItem.getByLabel("搜索 SKU").fill(testSkus[0]!.skuCode);
+    await selectFormOption(
+      page,
+      firstItem.getByLabel("SKU", { exact: true }),
+      `${testSkus[0]!.skuCode} · ${testSkus[0]!.name}`,
+    );
     await firstItem.getByLabel("数量").fill("2");
     await page.getByRole("button", { name: "添加明细" }).click();
     const secondItem = page.getByTestId("sales-order-item").nth(1);
-    await secondItem.getByLabel("SKU", { exact: true }).selectOption(testSkus[1]!.id);
+    await secondItem.getByLabel("搜索 SKU").fill(testSkus[1]!.skuCode);
+    await selectFormOption(
+      page,
+      secondItem.getByLabel("SKU", { exact: true }),
+      `${testSkus[1]!.skuCode} · ${testSkus[1]!.name}`,
+    );
     await secondItem.getByLabel("数量").fill("3");
     await page.getByRole("button", { name: "保存草稿" }).click();
     await expect(page).toHaveURL(/\/sales-orders\/[^/?]+\/edit\?notice=created$/);
@@ -338,7 +375,7 @@ test("移动端通过全屏筛选抽屉筛选销售单并看到已启用条件",
   await page.getByRole("button", { name: "打开销售单筛选" }).click();
   const filters = page.getByRole("dialog", { name: "筛选销售单" });
   await expect(filters).toBeVisible();
-  await filters.getByLabel("履约状态").selectOption("DRAFT");
+  await selectFormOption(page, filters.getByLabel("履约状态"), "草稿");
   await filters.getByRole("button", { name: "应用筛选" }).click();
 
   await expect(page).toHaveURL(/status=DRAFT/);
@@ -348,7 +385,11 @@ test("移动端通过全屏筛选抽屉筛选销售单并看到已启用条件",
 test("销售单草稿表单提示未保存离开并在提交时重新校验会话", async ({ page }) => {
   await signIn(page, "sales@example.local", /\/sales-orders$/);
   await page.goto("/sales-orders/new");
-  await page.getByLabel("客户").selectOption("demo-customer-kh-0003");
+  await selectFormOption(
+    page,
+    page.getByLabel("客户"),
+    "KH-0003 · 广顺五金商行",
+  );
 
   page.once("dialog", async (dialog) => {
     expect(dialog.type()).toBe("confirm");
@@ -358,7 +399,12 @@ test("销售单草稿表单提示未保存离开并在提交时重新校验会�
   await expect(page).toHaveURL(/\/sales-orders\/new$/);
 
   const item = page.getByTestId("sales-order-item").first();
-  await item.getByLabel("SKU", { exact: true }).selectOption("demo-sku-wj-ls-001");
+  await item.getByLabel("搜索 SKU").fill("WJ-LS-001");
+  await selectFormOption(
+    page,
+    item.getByLabel("SKU", { exact: true }),
+    "WJ-LS-001 · 304 不锈钢六角螺栓 M8×30",
+  );
   await item.getByLabel("数量").fill("7");
   await switchSession(page, "finance@example.local");
   await page.getByRole("button", { name: "保存草稿" }).click();

@@ -13,7 +13,7 @@ export function useUnsavedChangesGuard(
       const target = event.target;
       if (!(target instanceof Element)) return;
       const navigationTarget = target.closest<HTMLElement>(
-        "a[href], button[data-navigation-action]",
+        "a[href], [data-navigation-action]",
       );
       if (!navigationTarget) return;
       if (

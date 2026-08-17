@@ -81,7 +81,9 @@ test("老板可以创建、编辑和停用 SKU，销售只看到启用目录", a
     await page.goto(`/skus?q=${skuCode}`);
     await expect(page.getByText("搜索", { exact: true })).toBeVisible();
     await expect(page.getByText("分类", { exact: true }).first()).toBeVisible();
-    await expect(page.getByLabel("仅看库存预警")).toBeVisible();
+    await expect(
+      page.getByRole("checkbox", { name: "仅看库存预警" }),
+    ).toBeVisible();
     await page.getByText("304 不锈钢六角螺栓 E2E", { exact: true }).first().click();
     await expect(page).toHaveURL(/\/skus\/[^/?]+$/);
 
@@ -127,7 +129,9 @@ test("销售可以查看启用 SKU 详情但不能进入编辑页", async ({ pag
   await expect(page.getByRole("columnheader", { name: "可用量" })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "现存量" })).toHaveCount(0);
   await expect(page.getByRole("columnheader", { name: "预占量" })).toHaveCount(0);
-  await expect(page.getByLabel("仅看库存预警")).toHaveCount(0);
+  await expect(
+    page.getByRole("checkbox", { name: "仅看库存预警" }),
+  ).toHaveCount(0);
 
   await page.goto("/skus/demo-sku-wj-qp-004");
   await expect(page.getByRole("heading", { name: "基本资料" })).toBeVisible();

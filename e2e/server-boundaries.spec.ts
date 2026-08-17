@@ -132,8 +132,15 @@ test("非老板不能绕过账号服务调用 Better Auth 更新用户入口", a
 test("账号确认对话框管理焦点且列表允许切换每页条数", async ({ page }) => {
   await signIn(page, "owner@example.local", /\/overview$/);
   await page.goto("/settings/accounts");
-  await expect(page.getByLabel("每页条数")).toHaveValue("20");
-  await expect(page.getByLabel("每页条数").locator("option")).toHaveCount(3);
+  const pageSize = page.getByLabel("每页条数");
+  await expect(pageSize).toContainText("每页 20 条");
+  await pageSize.click();
+  const pageSizeListbox = page.getByRole("listbox").filter({ visible: true });
+  await expect(pageSizeListbox.getByRole("option")).toHaveCount(3);
+  await pageSizeListbox.getByRole("option", { name: "每页 50 条" }).click();
+  await expect(pageSize).toContainText("每页 50 条");
+  await page.getByRole("button", { name: "筛选" }).click();
+  await expect(page).toHaveURL(/size=50/);
 
   const disableButton = page
     .getByRole("row")
@@ -186,7 +193,7 @@ test("审计筛选拒绝无效日历日期和反向日期范围", async ({ page 
   await expect(
     page.getByText("请输入真实有效的日期。", { exact: true }),
   ).toBeVisible();
-  await expect(page.getByLabel("每页条数")).toHaveValue("20");
+  await expect(page.getByLabel("每页条数")).toContainText("20 条");
 
   await page.goto("/audit?from=2026-08-14&to=2026-08-13");
   await expect(
@@ -200,7 +207,9 @@ test("创建账号 Server Action 在提交时重新校验当前会话", async ({
   await page.getByLabel("姓名").fill("越权测试账号");
   await page.getByLabel("邮箱").fill(`unauthorized-${randomUUID()}@example.local`);
   await page.getByLabel("初始密码").fill(password);
-  await page.getByLabel("销售").check();
+  const salesRole = page.getByRole("checkbox", { name: "销售" });
+  await salesRole.click();
+  await expect(salesRole).toHaveAttribute("aria-checked", "true");
 
   await switchSession(page, "sales@example.local");
   await page.getByRole("button", { name: "创建账号" }).click();
@@ -213,7 +222,10 @@ test("调整角色 Server Action 在提交时重新校验当前会话", async ({
   await signIn(page, "owner@example.local", /\/overview$/);
   await page.goto("/settings/accounts");
   await page.goto(await multiAccountEditHref(page));
-  await page.getByLabel("仓库").uncheck();
+  const warehouseRole = page.getByRole("checkbox", { name: "仓库" });
+  await expect(warehouseRole).toHaveAttribute("aria-checked", "true");
+  await warehouseRole.click();
+  await expect(warehouseRole).toHaveAttribute("aria-checked", "false");
 
   await switchSession(page, "sales@example.local");
   await page.getByRole("button", { name: "保存角色" }).click();
@@ -228,7 +240,11 @@ test("停用账号 Server Action 在提交时重新校验当前会话", async ({
     .getByRole("row")
     .filter({ hasText: "multi@example.local" });
   await row.getByRole("button", { name: "停用" }).click();
-  await page.getByLabel("我确认停用此账号并撤销已有会话。").check();
+  const confirmation = page.getByRole("checkbox", {
+    name: "我确认停用此账号并撤销已有会话。",
+  });
+  await confirmation.click();
+  await expect(confirmation).toHaveAttribute("aria-checked", "true");
 
   await switchSession(page, "sales@example.local");
   await page.getByRole("button", { name: "确认停用" }).click();
