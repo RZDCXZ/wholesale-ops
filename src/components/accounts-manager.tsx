@@ -16,6 +16,9 @@ import {
   type AccountActionState,
 } from "@/app/(workspace)/settings/accounts/actions";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { FormSelect } from "@/components/ui/form-select";
+import { Input } from "@/components/ui/input";
 import { RoleBadge } from "@/components/ui/role-badge";
 import { keepFocusInDialog } from "@/lib/dialog-focus";
 
@@ -112,16 +115,15 @@ function DisableAccountDialog({
               停用 <strong>{account.name}</strong>（{account.email}）后，将立即撤销其已有会话，该账号也不能再次登录。
             </p>
             <label className="flex items-start gap-2.5 rounded-[7px] border border-[#edb1b1] bg-[#fff0f0] p-3 text-[13px] leading-5 text-[#8f1d1d]">
-              <input
+              <Checkbox
                 ref={confirmation}
-                type="checkbox"
                 name="confirmed"
                 value="yes"
                 aria-invalid={Boolean(state.fieldErrors?.confirmed)}
                 aria-describedby={
                   state.fieldErrors?.confirmed ? "disable-confirmation-error" : undefined
                 }
-                className="mt-0.5 size-4 accent-[#c62828]"
+                className="mt-0.5 data-checked:border-[#c62828] data-checked:bg-[#c62828]"
               />
               我确认停用此账号并撤销已有会话。
             </label>
@@ -201,12 +203,16 @@ export function AccountsManager({
     auditHref: string;
   }>();
   const dialogTrigger = useRef<HTMLButtonElement | null>(null);
+  const noticeRequestStarted = useRef(false);
 
   useEffect(() => {
-    const controller = new AbortController();
+    // React development mode replays effects once. Keep this one-shot request
+    // alive so its cookie-backed notice is neither duplicated nor aborted.
+    if (noticeRequestStarted.current) return;
+    noticeRequestStarted.current = true;
+
     void fetch("/api/account-action-notice", {
       method: "POST",
-      signal: controller.signal,
     })
       .then(async (response) => {
         if (response.status !== 200) return;
@@ -214,12 +220,9 @@ export function AccountsManager({
           (await response.json()) as { message: string; auditHref: string },
         );
       })
-      .catch((error: unknown) => {
-        if (!(error instanceof DOMException && error.name === "AbortError")) {
-          setSuccessNotice(undefined);
-        }
+      .catch(() => {
+        setSuccessNotice(undefined);
       });
-    return () => controller.abort();
   }, []);
 
   const openDisable = useCallback(
@@ -272,55 +275,38 @@ export function AccountsManager({
 
       <section className="overflow-hidden rounded-lg border border-[#e4e7ec] bg-white">
         <form
+          key={[filters.query, filters.role, filters.status, filters.pageSize].join("|")}
           method="get"
           className="flex items-center gap-2.5 border-b border-[#e4e7ec] p-3.5 max-md:grid max-md:grid-cols-2"
         >
-          <input
+          <Input
             name="q"
             defaultValue={filters.query}
             placeholder="搜索姓名或邮箱"
-            className="min-h-11 min-w-0 flex-1 rounded-[7px] border border-[#d0d5dd] px-3 text-[13px] outline-none focus:border-[#2563eb] focus:ring-3 focus:ring-blue-500/15 max-md:col-span-2"
+            className="min-w-0 flex-1 max-md:col-span-2"
           />
-          <select
+          <FormSelect
             name="role"
             defaultValue={filters.role}
             aria-label="角色"
-            className="min-h-11 rounded-[7px] border border-[#d0d5dd] bg-white px-3 text-[13px] text-[#344054]"
-          >
-            <option value="">全部角色</option>
-            {roleOptions.map(({ value, label }) => (
-              <option key={value} value={value}>
-                {label}
-              </option>
-            ))}
-          </select>
-          <select
+            options={[{ value: "", label: "全部角色" }, ...roleOptions]}
+          />
+          <FormSelect
             name="status"
             defaultValue={filters.status}
             aria-label="启用状态"
-            className="min-h-11 rounded-[7px] border border-[#d0d5dd] bg-white px-3 text-[13px] text-[#344054]"
-          >
-            <option value="">全部状态</option>
-            <option value="enabled">启用</option>
-            <option value="disabled">停用</option>
-          </select>
-          <select
+            options={[{ value: "", label: "全部状态" }, { value: "enabled", label: "启用" }, { value: "disabled", label: "停用" }]}
+          />
+          <FormSelect
             name="size"
             defaultValue={String(filters.pageSize)}
             aria-label="每页条数"
-            className="min-h-11 rounded-[7px] border border-[#d0d5dd] bg-white px-3 text-[13px] text-[#344054]"
-          >
-            <option value="20">每页 20 条</option>
-            <option value="50">每页 50 条</option>
-            <option value="100">每页 100 条</option>
-          </select>
+            options={[{ value: "20", label: "每页 20 条" }, { value: "50", label: "每页 50 条" }, { value: "100", label: "每页 100 条" }]}
+          />
           <Button type="submit">筛选</Button>
-          <Link
-            href="/settings/accounts"
-            className="inline-flex min-h-11 items-center justify-center rounded-[7px] px-3 text-[13px] font-semibold text-[#475467] hover:bg-[#f2f4f7]"
-          >
+          <Button render={<Link href="/settings/accounts" />} nativeButton={false} variant="ghost">
             清除
-          </Link>
+          </Button>
         </form>
 
         {accounts.length === 0 ? (

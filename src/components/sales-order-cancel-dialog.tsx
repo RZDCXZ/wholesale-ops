@@ -15,6 +15,7 @@ import {
 } from "@/app/(workspace)/sales-orders/actions";
 import type { SalesOrderCancellationPreviewItem } from "@/application/sales-orders/sales-order-service";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { keepFocusInDialog } from "@/lib/dialog-focus";
 import { formatQuantity } from "@/lib/format-quantity";
 
@@ -128,7 +129,7 @@ function CancelDialog({
               <span>
                 取消原因 <span className="text-[#c62828]">*</span>
               </span>
-              <textarea
+              <Textarea
                 ref={reason}
                 name="reason"
                 required
@@ -140,7 +141,7 @@ function CancelDialog({
                   state.fieldErrors?.reason ? "cancel-reason-error" : undefined
                 }
                 placeholder="请说明取消原因"
-                className="min-h-24 resize-y rounded-[7px] border border-[#d0d5dd] px-3 py-2.5 text-sm text-[#1d2939] outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#bfdbfe] aria-invalid:border-[#d92d20]"
+                className="resize-y"
               />
               {state.fieldErrors?.reason?.[0] ? (
                 <small id="cancel-reason-error" className="text-[#c62828]">

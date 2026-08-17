@@ -23,7 +23,14 @@ import { useState, type ReactNode } from "react";
 
 import type { Actor } from "@/application/auth/resolve-actor";
 import { getActorNavigation } from "@/application/auth/access-policy";
-import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { RoleBadge } from "@/components/ui/role-badge";
 import { authClient } from "@/lib/auth-client";
 import { cn } from "@/lib/utils";
@@ -53,7 +60,6 @@ export function AppShell({
   const router = useRouter();
   const pathname = usePathname();
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false);
-  const [isAccountOpen, setIsAccountOpen] = useState(false);
   const [logoutError, setLogoutError] = useState<string>();
   const actorNavigation = getActorNavigation(actor);
   const groupedNavigation = actorNavigation.reduce<
@@ -172,13 +178,14 @@ export function AppShell({
             </div>
           </div>
 
-          <div className="relative">
-            <button
-              type="button"
-              aria-expanded={isAccountOpen}
-              aria-haspopup="menu"
-              onClick={() => setIsAccountOpen((open) => !open)}
-              className="flex min-h-11 items-center gap-2 rounded-lg border-0 bg-transparent px-1.5 hover:bg-[#f6f7f9]"
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <button
+                  type="button"
+                  className="flex min-h-11 items-center gap-2 rounded-lg border-0 bg-transparent px-1.5 hover:bg-[#f6f7f9]"
+                />
+              }
             >
               <span className="grid size-[30px] place-items-center rounded-full bg-[#e8edf4] text-[13px] font-bold text-[#344054]">
                 {actor.name.slice(0, 1)}
@@ -190,14 +197,14 @@ export function AppShell({
                 </span>
               ))}
               <IconChevronDown aria-hidden size={16} />
-            </button>
-
-            {isAccountOpen ? (
-              <div
-                role="menu"
-                className="absolute top-[calc(100%+8px)] right-0 w-60 rounded-[10px] border border-[#e4e7ec] bg-white p-2 shadow-[0_16px_36px_rgba(16,24,40,0.12)]"
-              >
-                <div className="border-b border-[#e4e7ec] px-2 py-2.5">
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="end"
+              sideOffset={8}
+              className="w-60 p-2 shadow-[0_16px_36px_rgba(16,24,40,0.12)]"
+            >
+              <DropdownMenuGroup>
+                <div className="px-2 py-2.5">
                   <strong className="block text-sm">{actor.name}</strong>
                   <span className="mt-1 block text-xs text-[#667085]">
                     {actor.email}
@@ -208,24 +215,25 @@ export function AppShell({
                     ))}
                   </div>
                 </div>
-                {logoutError ? (
-                  <p role="alert" className="px-2 pt-2 text-xs text-[#c62828]">
-                    {logoutError}
-                  </p>
-                ) : null}
-                <Button
-                  role="menuitem"
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              {logoutError ? (
+                <p role="alert" className="px-2 py-2 text-xs text-[#c62828]">
+                  {logoutError}
+                </p>
+              ) : null}
+              <DropdownMenuGroup>
+                <DropdownMenuItem
                   data-navigation-action="logout"
-                  variant="ghost"
-                  className="mt-1 w-full justify-start"
+                  className="min-h-11 px-2 text-sm"
                   onClick={signOut}
                 >
-                  <IconLogout aria-hidden size={18} />
+                  <IconLogout aria-hidden />
                   退出登录
-                </Button>
-              </div>
-            ) : null}
-          </div>
+                </DropdownMenuItem>
+              </DropdownMenuGroup>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </header>
 
         <main className="mx-auto w-full max-w-[1500px] p-3.5 md:p-6">{children}</main>

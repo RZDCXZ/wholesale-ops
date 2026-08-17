@@ -5,6 +5,11 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 
 import { ExportButton } from "@/components/export-button";
+import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { FormSelect } from "@/components/ui/form-select";
+import { Input } from "@/components/ui/input";
 import { keepFocusInDialog } from "@/lib/dialog-focus";
 
 type FilterState = {
@@ -23,8 +28,7 @@ const statusOptions = [
   { value: "OUTBOUND", label: "已出库" },
   { value: "CANCELLED", label: "已取消" },
 ] as const;
-const labelClass = "grid gap-1.5 text-xs font-semibold text-[#475467]";
-const controlClass = "min-h-11 min-w-0 rounded-[7px] border border-[#d0d5dd] bg-white px-3 text-[13px] font-normal text-[#344054] outline-none focus:border-[#2563eb] focus:ring-3 focus:ring-blue-500/15";
+const labelClass = "text-xs font-semibold text-[#475467]";
 
 function FilterFields({
   state,
@@ -45,12 +49,12 @@ function FilterFields({
       {state.outboundOn ? (
         <input type="hidden" name="outboundOn" value={state.outboundOn} />
       ) : null}
-      <label className={`${labelClass} xl:col-span-2`}><span>销售单编号或客户</span><input name="q" defaultValue={state.query} placeholder="编号或客户名称" className={controlClass} /></label>
-      <label className={labelClass}><span>履约状态</span><select name="status" defaultValue={state.status} className={controlClass}><option value="">全部状态</option>{statusOptions.map(({ value, label }) => <option key={value} value={value}>{label}</option>)}</select></label>
-      {canFilterResponsible ? <label className={labelClass}><span>客户负责人</span><select name="responsibleSalesId" defaultValue={state.responsibleSalesId} className={controlClass}><option value="">全部负责人</option>{responsibleOptions.map((option) => <option key={option.id} value={option.id}>{option.name}</option>)}</select></label> : null}
-      <label className={labelClass}><span>开始日期</span><input type="date" name="from" defaultValue={state.from} aria-invalid={Boolean(dateError)} aria-describedby={dateError ? dateErrorId : undefined} className={controlClass} /></label>
-      <label className={labelClass}><span>结束日期</span><input type="date" name="to" defaultValue={state.to} aria-invalid={Boolean(dateError)} aria-describedby={dateError ? dateErrorId : undefined} className={controlClass} /></label>
-      <label className={labelClass}><span>每页条数</span><select name="size" defaultValue={String(state.pageSize)} className={controlClass}><option value="20">20 条</option><option value="50">50 条</option><option value="100">100 条</option></select></label>
+      <Field className="xl:col-span-2"><FieldLabel htmlFor={`${idPrefix}-query`} className={labelClass}>销售单编号或客户</FieldLabel><Input id={`${idPrefix}-query`} name="q" defaultValue={state.query} placeholder="编号或客户名称" /></Field>
+      <Field><FieldLabel htmlFor={`${idPrefix}-status`} className={labelClass}>履约状态</FieldLabel><FormSelect id={`${idPrefix}-status`} name="status" defaultValue={state.status} options={[{ value: "", label: "全部状态" }, ...statusOptions]} /></Field>
+      {canFilterResponsible ? <Field><FieldLabel htmlFor={`${idPrefix}-responsible`} className={labelClass}>客户负责人</FieldLabel><FormSelect id={`${idPrefix}-responsible`} name="responsibleSalesId" defaultValue={state.responsibleSalesId} options={[{ value: "", label: "全部负责人" }, ...responsibleOptions.map((option) => ({ value: option.id, label: option.name }))]} /></Field> : null}
+      <Field data-invalid={Boolean(dateError)}><FieldLabel htmlFor={`${idPrefix}-from`} className={labelClass}>开始日期</FieldLabel><DatePicker id={`${idPrefix}-from`} name="from" value={state.from} invalid={Boolean(dateError)} describedBy={dateError ? dateErrorId : undefined} /></Field>
+      <Field data-invalid={Boolean(dateError)}><FieldLabel htmlFor={`${idPrefix}-to`} className={labelClass}>结束日期</FieldLabel><DatePicker id={`${idPrefix}-to`} name="to" value={state.to} invalid={Boolean(dateError)} describedBy={dateError ? dateErrorId : undefined} /></Field>
+      <Field><FieldLabel htmlFor={`${idPrefix}-size`} className={labelClass}>每页条数</FieldLabel><FormSelect id={`${idPrefix}-size`} name="size" defaultValue={String(state.pageSize)} options={[{ value: "20", label: "20 条" }, { value: "50", label: "50 条" }, { value: "100", label: "100 条" }]} /></Field>
       {dateError ? <p id={dateErrorId} role="alert" className="col-span-full rounded-[7px] border border-[#edb1b1] bg-[#fff0f0] px-3 py-2 text-[13px] text-[#c62828]">{dateError}</p> : null}
     </>
   );
@@ -95,12 +99,13 @@ export function SalesOrderFilters({
     state.to ? `结束：${state.to}` : undefined,
     state.outboundOn ? `出库日：${state.outboundOn}` : undefined,
   ].filter((condition): condition is string => Boolean(condition));
+  const filterKey = [state.query, state.status, state.responsibleSalesId, state.from, state.to, state.outboundOn, state.pageSize].join("|");
 
   return (
     <>
-      <form method="get" className="hidden items-end gap-3 border-b border-[#e4e7ec] p-3.5 md:grid md:grid-cols-2 xl:grid-cols-6">
+      <form key={`desktop-${filterKey}`} method="get" className="hidden items-end gap-3 border-b border-[#e4e7ec] p-3.5 md:grid md:grid-cols-2 xl:grid-cols-6">
         <FilterFields state={state} responsibleOptions={responsibleOptions} canFilterResponsible={canFilterResponsible} dateError={dateError} idPrefix="sales-order-desktop-filter" />
-        <div className="flex items-start justify-between gap-3 md:col-span-2 xl:col-span-full"><ExportButton key={exportHref} href={exportHref} entityLabel="销售单" disabled={exportDisabled} disabledMessage={exportDisabledMessage} /><div className="flex gap-2"><button type="submit" className="min-h-11 rounded-[7px] border border-[#d0d5dd] px-4 text-[13px] font-semibold text-[#344054]">筛选</button><Link href="/sales-orders" className="inline-flex min-h-11 items-center justify-center rounded-[7px] px-4 text-[13px] font-semibold text-[#475467] hover:bg-[#f2f4f7]">清除</Link></div></div>
+        <div className="flex items-start justify-between gap-3 md:col-span-2 xl:col-span-full"><ExportButton key={exportHref} href={exportHref} entityLabel="销售单" disabled={exportDisabled} disabledMessage={exportDisabledMessage} /><div className="flex gap-2"><Button type="submit">筛选</Button><Button render={<Link href="/sales-orders" />} nativeButton={false} variant="ghost">清除</Button></div></div>
       </form>
 
       <div className="grid gap-3 border-b border-[#e4e7ec] p-3.5 md:hidden">
@@ -116,9 +121,9 @@ export function SalesOrderFilters({
         <div className="fixed inset-0 z-50 bg-white md:hidden">
           <section role="dialog" aria-modal="true" aria-label="筛选销售单" onKeyDown={(event) => keepFocusInDialog(event, () => setOpen(false))} className="flex h-full flex-col">
             <header className="flex min-h-[64px] items-center justify-between border-b border-[#e4e7ec] px-4"><h2 className="text-lg font-bold">筛选销售单</h2><button ref={closeButton} type="button" aria-label="关闭筛选" onClick={() => setOpen(false)} className="grid size-11 place-items-center rounded-lg hover:bg-[#f2f4f7]"><IconX aria-hidden size={20} /></button></header>
-            <form method="get" className="flex min-h-0 flex-1 flex-col">
+            <form key={`mobile-${filterKey}`} method="get" className="flex min-h-0 flex-1 flex-col">
               <div className="grid flex-1 content-start gap-4 overflow-y-auto p-4"><FilterFields state={state} responsibleOptions={responsibleOptions} canFilterResponsible={canFilterResponsible} dateError={dateError} idPrefix="sales-order-mobile-filter" /></div>
-              <footer className="flex gap-2 border-t border-[#e4e7ec] p-4"><Link href="/sales-orders" className="inline-flex min-h-11 flex-1 items-center justify-center rounded-[7px] border border-[#d0d5dd] px-4 text-sm font-semibold text-[#475467]">清除</Link><button type="submit" className="min-h-11 flex-1 rounded-[7px] bg-[#2563eb] px-4 text-sm font-semibold text-white">应用筛选</button></footer>
+              <footer className="flex gap-2 border-t border-[#e4e7ec] p-4"><Button render={<Link href="/sales-orders" onClick={() => setOpen(false)} />} nativeButton={false} className="flex-1">清除</Button><Button type="submit" variant="primary" className="flex-1">应用筛选</Button></footer>
             </form>
           </section>
         </div>

@@ -10,6 +10,10 @@ import {
 } from "@/application/accounts/account-service";
 import { AuditDetailDrawer } from "@/components/audit-detail-drawer";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { FormSelect } from "@/components/ui/form-select";
+import { Input } from "@/components/ui/input";
 import { prisma } from "@/lib/db";
 import { getPageActor } from "@/lib/server-authorization";
 
@@ -216,91 +220,17 @@ export default async function AuditPage({
 
       <section className="overflow-hidden rounded-lg border border-[#e4e7ec] bg-white">
         <form
+          key={[filters.from, filters.to, filters.actor, filters.action, filters.objectType, filters.reference, filters.pageSize].join("|")}
           method="get"
           className="grid grid-cols-6 gap-2.5 border-b border-[#e4e7ec] p-3.5 max-xl:grid-cols-3 max-md:grid-cols-2"
         >
-          <label className="grid gap-1 text-xs font-semibold text-[#475467]">
-            开始日期
-            <input
-              type="date"
-              name="from"
-              defaultValue={filters.from}
-              aria-invalid={Boolean(dateError)}
-              aria-describedby={dateError ? "audit-date-error" : undefined}
-              className="min-h-11 rounded-[7px] border border-[#d0d5dd] px-3 font-normal text-[#344054]"
-            />
-          </label>
-          <label className="grid gap-1 text-xs font-semibold text-[#475467]">
-            结束日期
-            <input
-              type="date"
-              name="to"
-              defaultValue={filters.to}
-              aria-invalid={Boolean(dateError)}
-              aria-describedby={dateError ? "audit-date-error" : undefined}
-              className="min-h-11 rounded-[7px] border border-[#d0d5dd] px-3 font-normal text-[#344054]"
-            />
-          </label>
-          <label className="grid gap-1 text-xs font-semibold text-[#475467]">
-            操作者
-            <input
-              name="actor"
-              defaultValue={filters.actor}
-              placeholder="姓名"
-              className="min-h-11 rounded-[7px] border border-[#d0d5dd] px-3 font-normal text-[#344054]"
-            />
-          </label>
-          <label className="grid gap-1 text-xs font-semibold text-[#475467]">
-            动作
-            <select
-              name="action"
-              defaultValue={filters.action}
-              className="min-h-11 rounded-[7px] border border-[#d0d5dd] bg-white px-3 font-normal text-[#344054]"
-            >
-              <option value="">全部动作</option>
-              {actionOptions.map(({ value, label }) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="grid gap-1 text-xs font-semibold text-[#475467]">
-            对象类型
-            <select
-              name="objectType"
-              defaultValue={filters.objectType}
-              className="min-h-11 rounded-[7px] border border-[#d0d5dd] bg-white px-3 font-normal text-[#344054]"
-            >
-              <option value="">全部对象</option>
-              {objectOptions.map(({ value, label }) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="grid gap-1 text-xs font-semibold text-[#475467]">
-            关联编号
-            <input
-              name="reference"
-              defaultValue={filters.reference}
-              placeholder="邮箱或业务编号"
-              className="min-h-11 rounded-[7px] border border-[#d0d5dd] px-3 font-normal text-[#344054]"
-            />
-          </label>
-          <label className="grid gap-1 text-xs font-semibold text-[#475467]">
-            每页条数
-            <select
-              name="size"
-              defaultValue={String(filters.pageSize)}
-              className="min-h-11 rounded-[7px] border border-[#d0d5dd] bg-white px-3 font-normal text-[#344054]"
-            >
-              <option value="20">20 条</option>
-              <option value="50">50 条</option>
-              <option value="100">100 条</option>
-            </select>
-          </label>
+          <Field data-invalid={Boolean(dateError)}><FieldLabel htmlFor="audit-from" className="text-xs font-semibold text-[#475467]">开始日期</FieldLabel><DatePicker id="audit-from" name="from" value={filters.from} invalid={Boolean(dateError)} describedBy={dateError ? "audit-date-error" : undefined} /></Field>
+          <Field data-invalid={Boolean(dateError)}><FieldLabel htmlFor="audit-to" className="text-xs font-semibold text-[#475467]">结束日期</FieldLabel><DatePicker id="audit-to" name="to" value={filters.to} invalid={Boolean(dateError)} describedBy={dateError ? "audit-date-error" : undefined} /></Field>
+          <Field><FieldLabel htmlFor="audit-actor" className="text-xs font-semibold text-[#475467]">操作者</FieldLabel><Input id="audit-actor" name="actor" defaultValue={filters.actor} placeholder="姓名" /></Field>
+          <Field><FieldLabel htmlFor="audit-action" className="text-xs font-semibold text-[#475467]">动作</FieldLabel><FormSelect id="audit-action" name="action" defaultValue={filters.action} options={[{ value: "", label: "全部动作" }, ...actionOptions]} /></Field>
+          <Field><FieldLabel htmlFor="audit-object" className="text-xs font-semibold text-[#475467]">对象类型</FieldLabel><FormSelect id="audit-object" name="objectType" defaultValue={filters.objectType} options={[{ value: "", label: "全部对象" }, ...objectOptions]} /></Field>
+          <Field><FieldLabel htmlFor="audit-reference" className="text-xs font-semibold text-[#475467]">关联编号</FieldLabel><Input id="audit-reference" name="reference" defaultValue={filters.reference} placeholder="邮箱或业务编号" /></Field>
+          <Field><FieldLabel htmlFor="audit-size" className="text-xs font-semibold text-[#475467]">每页条数</FieldLabel><FormSelect id="audit-size" name="size" defaultValue={String(filters.pageSize)} options={[{ value: "20", label: "20 条" }, { value: "50", label: "50 条" }, { value: "100", label: "100 条" }]} /></Field>
           {dateError ? (
             <p
               id="audit-date-error"
@@ -311,13 +241,10 @@ export default async function AuditPage({
             </p>
           ) : null}
           <div className="col-span-full flex justify-end gap-2">
-            <Link
-              href="/audit"
-              className="inline-flex min-h-11 items-center justify-center rounded-[7px] px-3 text-[13px] font-semibold text-[#475467] hover:bg-[#f2f4f7]"
-            >
-              清除筛选
-            </Link>
             <Button type="submit">筛选</Button>
+            <Button render={<Link href="/audit" />} nativeButton={false} variant="ghost">
+              清除筛选
+            </Button>
           </div>
         </form>
 

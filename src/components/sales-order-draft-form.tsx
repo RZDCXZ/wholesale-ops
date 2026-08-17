@@ -10,6 +10,8 @@ import {
   updateSalesOrderDraftAction,
 } from "@/app/(workspace)/sales-orders/actions";
 import { Button } from "@/components/ui/button";
+import { FormSelect } from "@/components/ui/form-select";
+import { Input } from "@/components/ui/input";
 import { useUnsavedChangesGuard } from "@/lib/use-unsaved-changes-guard";
 
 export type SalesOrderCustomerOption = {
@@ -66,7 +68,6 @@ type DraftRow = {
 };
 
 const initialActionState: SalesOrderActionState = { status: "idle" };
-const controlClass = "min-h-11 min-w-0 rounded-[7px] border border-[#d0d5dd] bg-white px-3 text-[13px] text-[#344054] outline-none focus:border-[#2563eb] focus:ring-3 focus:ring-blue-500/15 disabled:bg-[#f2f4f7]";
 const positiveIntegerPattern = /^\d+$/;
 const moneyPattern = /^(?:0|[1-9]\d*)(?:\.\d{1,2})?$/;
 
@@ -241,27 +242,21 @@ export function SalesOrderDraftForm({
         </div>
         <label className="grid gap-1.5 text-[13px] font-semibold text-[#475467]">
           <span>客户 <b className="text-[#c62828]">*</b></span>
-          <select
+          <FormSelect
             aria-label="客户"
             value={customerId}
-            onChange={(event) => {
+            onValueChange={(value) => {
               setDirty(true);
-              setCustomerId(event.target.value);
+              setCustomerId(value);
             }}
             aria-invalid={Boolean(errorFor("customerId"))}
             aria-describedby={errorFor("customerId") ? "sales-order-customer-error" : undefined}
-            className={controlClass}
-          >
-            <option value="">请选择当前可操作且启用的客户</option>
-            {draft ? (
-              <option value={draft.customerId}>{draft.customerSnapshot.customerCode} · {draft.customerSnapshot.name}{customerById.has(draft.customerId) ? "（草稿快照）" : "（当前不可用）"}</option>
-            ) : null}
-            {customers.filter((customer) => customer.id !== draft?.customerId).map((customer) => (
-              <option key={customer.id} value={customer.id}>
-                {customer.customerCode} · {customer.name}
-              </option>
-            ))}
-          </select>
+            options={[
+              { value: "", label: "请选择当前可操作且启用的客户" },
+              ...(draft ? [{ value: draft.customerId, label: `${draft.customerSnapshot.customerCode} · ${draft.customerSnapshot.name}${customerById.has(draft.customerId) ? "（草稿快照）" : "（当前不可用）"}` }] : []),
+              ...customers.filter((customer) => customer.id !== draft?.customerId).map((customer) => ({ value: customer.id, label: `${customer.customerCode} · ${customer.name}` })),
+            ]}
+          />
           {errorFor("customerId") ? <span id="sales-order-customer-error" className="text-xs font-normal text-[#c62828]">{errorFor("customerId")}</span> : null}
         </label>
         {selectedCustomer ? (
@@ -307,19 +302,19 @@ export function SalesOrderDraftForm({
               >
                 <div className="grid gap-1.5 text-xs font-semibold text-[#475467] lg:col-span-1">
                   <span>SKU</span>
-                  <input aria-label="搜索 SKU" type="search" value={row.skuQuery} onChange={(event) => updateRow(row.clientId, { skuQuery: event.target.value })} placeholder="按编码或名称搜索" className={controlClass} />
-                  <select aria-label="SKU" value={row.skuId} onChange={(event) => selectSku(row, event.target.value)} aria-invalid={Boolean(skuError)} aria-describedby={skuError ? skuErrorId : undefined} className={controlClass}>
-                    <option value="">请选择 SKU</option>
-                    {row.fallbackSku && !skuById.has(row.fallbackSku.id) ? <option value={row.fallbackSku.id}>{row.fallbackSku.skuCode} · {row.fallbackSku.name}（当前不可用）</option> : null}
-                    {visibleSkus.map((option) => <option key={option.id} value={option.id}>{option.skuCode} · {option.name}</option>)}
-                  </select>
+                  <Input aria-label="搜索 SKU" type="search" value={row.skuQuery} onChange={(event) => updateRow(row.clientId, { skuQuery: event.target.value })} placeholder="按编码或名称搜索" />
+                  <FormSelect aria-label="SKU" value={row.skuId} onValueChange={(value) => selectSku(row, value)} aria-invalid={Boolean(skuError)} aria-describedby={skuError ? skuErrorId : undefined} options={[
+                    { value: "", label: "请选择 SKU" },
+                    ...(row.fallbackSku && !skuById.has(row.fallbackSku.id) ? [{ value: row.fallbackSku.id, label: `${row.fallbackSku.skuCode} · ${row.fallbackSku.name}（当前不可用）` }] : []),
+                    ...visibleSkus.map((option) => ({ value: option.id, label: `${option.skuCode} · ${option.name}` })),
+                  ]} />
                   {skuError ? <span id={skuErrorId} className="font-normal text-[#c62828]">{skuError}</span> : null}
                 </div>
                 <div className="grid min-h-11 content-center gap-1 rounded-[7px] bg-[#f7f9fb] px-3 text-xs">
                   {sku ? <><span className={shortage > 0 ? "font-semibold text-[#c62828]" : "font-semibold text-[#027a48]"}>当前可用量 {sku.availableQuantity} {sku.inventoryUnit}</span><span className="text-[#667085]">参考售价 {formatMoney(sku.referencePriceFen)}</span>{shortage > 0 ? <span className="font-semibold text-[#c62828]">缺少 {shortage} {sku.inventoryUnit}</span> : null}</> : <span className="text-[#98a2b3]">选择后显示可用量与参考售价</span>}
                 </div>
-                <label className="grid gap-1.5 text-xs font-semibold text-[#475467]">数量<input aria-label="数量" inputMode="numeric" value={row.quantity} onChange={(event) => updateRow(row.clientId, { quantity: event.target.value })} aria-invalid={Boolean(quantityError)} aria-describedby={quantityError ? quantityErrorId : undefined} className={controlClass} />{quantityError ? <span id={quantityErrorId} className="font-normal text-[#c62828]">{quantityError}</span> : null}</label>
-                <label className="grid gap-1.5 text-xs font-semibold text-[#475467]">成交价<input aria-label="成交价" inputMode="decimal" value={row.transactionPrice} onChange={(event) => updateRow(row.clientId, { transactionPrice: event.target.value })} aria-invalid={Boolean(priceError)} aria-describedby={priceError ? priceErrorId : undefined} className={controlClass} />{priceError ? <span id={priceErrorId} className="font-normal text-[#c62828]">{priceError}</span> : null}</label>
+                <label className="grid gap-1.5 text-xs font-semibold text-[#475467]">数量<Input aria-label="数量" inputMode="numeric" value={row.quantity} onChange={(event) => updateRow(row.clientId, { quantity: event.target.value })} aria-invalid={Boolean(quantityError)} aria-describedby={quantityError ? quantityErrorId : undefined} />{quantityError ? <span id={quantityErrorId} className="font-normal text-[#c62828]">{quantityError}</span> : null}</label>
+                <label className="grid gap-1.5 text-xs font-semibold text-[#475467]">成交价<Input aria-label="成交价" inputMode="decimal" value={row.transactionPrice} onChange={(event) => updateRow(row.clientId, { transactionPrice: event.target.value })} aria-invalid={Boolean(priceError)} aria-describedby={priceError ? priceErrorId : undefined} />{priceError ? <span id={priceErrorId} className="font-normal text-[#c62828]">{priceError}</span> : null}</label>
                 <div className="grid min-h-11 content-center gap-1 text-right"><span className="text-xs text-[#667085]">小计</span><strong className="tabular-nums">{subtotal === undefined ? "—" : formatMoney(subtotal)}</strong></div>
                 <Button aria-label="删除明细" size="icon" variant="ghost" disabled={pending || rows.length === 1} onClick={() => { setDirty(true); setRows((current) => current.filter(({ clientId }) => clientId !== row.clientId)); }} className="text-[#c62828]"><IconTrash aria-hidden size={18} /></Button>
               </article>

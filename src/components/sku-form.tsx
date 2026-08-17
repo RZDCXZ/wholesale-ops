@@ -10,6 +10,8 @@ import {
   updateSkuAction,
 } from "@/app/(workspace)/skus/actions";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { useUnsavedChangesGuard } from "@/lib/use-unsaved-changes-guard";
 
 const initialState: SkuActionState = { status: "idle" };
@@ -55,9 +57,6 @@ function Field({
   );
 }
 
-const inputClass =
-  "min-h-11 rounded-[7px] border border-[#d0d5dd] px-3 font-normal text-[#344054] outline-none focus:border-[#2563eb] focus:ring-3 focus:ring-blue-500/15 disabled:bg-[#f2f4f7] disabled:text-[#667085]";
-
 export function SkuForm({ sku }: { sku?: EditableSku }) {
   const mode = sku ? "edit" : "create";
   const [state, formAction, pending] = useActionState(
@@ -94,26 +93,26 @@ export function SkuForm({ sku }: { sku?: EditableSku }) {
           errors={state.fieldErrors?.skuCode}
           hint={sku ? "SKU 编码创建后不可修改。" : undefined}
         >
-          <input
+          <Input
             name="skuCode"
             defaultValue={sku?.skuCode}
             disabled={Boolean(sku)}
             aria-invalid={invalid("skuCode")}
             aria-describedby={describedBy("skuCode")}
-            className={`${inputClass} font-mono`}
+            className="font-mono"
           />
         </Field>
         <Field label="名称" name="name" errors={state.fieldErrors?.name}>
-          <input name="name" defaultValue={sku?.name} aria-invalid={invalid("name")} aria-describedby={describedBy("name")} className={inputClass} />
+          <Input name="name" defaultValue={sku?.name} aria-invalid={invalid("name")} aria-describedby={describedBy("name")} />
         </Field>
         <Field label="分类" name="category" errors={state.fieldErrors?.category}>
-          <input name="category" defaultValue={sku?.category} aria-invalid={invalid("category")} aria-describedby={describedBy("category")} className={inputClass} />
+          <Input name="category" defaultValue={sku?.category} aria-invalid={invalid("category")} aria-describedby={describedBy("category")} />
         </Field>
         <Field label="库存单位" name="inventoryUnit" errors={state.fieldErrors?.inventoryUnit} hint="一个 SKU 始终使用同一整数计量口径。">
-          <input name="inventoryUnit" defaultValue={sku?.inventoryUnit} disabled={Boolean(sku)} aria-invalid={invalid("inventoryUnit")} aria-describedby={describedBy("inventoryUnit")} className={inputClass} />
+          <Input name="inventoryUnit" defaultValue={sku?.inventoryUnit} disabled={Boolean(sku)} aria-invalid={invalid("inventoryUnit")} aria-describedby={describedBy("inventoryUnit")} />
         </Field>
         <Field label="参考售价（元）" name="referencePrice" errors={state.fieldErrors?.referencePrice} hint="人民币含税金额，最多精确到分。">
-          <input
+          <Input
             name="referencePrice"
             inputMode="decimal"
             value={referencePrice}
@@ -125,15 +124,14 @@ export function SkuForm({ sku }: { sku?: EditableSku }) {
             }}
             aria-invalid={invalid("referencePrice")}
             aria-describedby={describedBy("referencePrice")}
-            className={inputClass}
           />
         </Field>
         <Field label="预警值" name="warningThreshold" errors={state.fieldErrors?.warningThreshold} hint="可用量小于或等于该非负整数时触发库存预警。">
-          <input name="warningThreshold" inputMode="numeric" defaultValue={sku?.warningThreshold ?? 0} aria-invalid={invalid("warningThreshold")} aria-describedby={describedBy("warningThreshold")} className={inputClass} />
+          <Input name="warningThreshold" inputMode="numeric" defaultValue={sku?.warningThreshold ?? 0} aria-invalid={invalid("warningThreshold")} aria-describedby={describedBy("warningThreshold")} />
         </Field>
         {mode === "create" ? (
           <label className="flex min-h-11 items-center gap-2 rounded-[7px] border border-[#d0d5dd] px-3 text-sm text-[#344054] sm:col-span-2">
-            <input type="checkbox" name="enabled" defaultChecked className="size-4 accent-[#2563eb]" />
+            <Checkbox id="sku-enabled" name="enabled" defaultChecked />
             启用 SKU
           </label>
         ) : (

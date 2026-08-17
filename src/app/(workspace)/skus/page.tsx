@@ -9,6 +9,11 @@ import {
   type SkuSortField,
 } from "@/application/skus/sku-service";
 import { SkuTableRow } from "@/components/sku-table-row";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { FormSelect } from "@/components/ui/form-select";
+import { Input } from "@/components/ui/input";
 import { prisma } from "@/lib/db";
 import { formatQuantity } from "@/lib/format-quantity";
 import { getPageActor } from "@/lib/server-authorization";
@@ -133,8 +138,7 @@ export default async function SkusPage({
   const notice = noticeValue === "deleted" ? "SKU 已删除，删除动作已写入业务审计。" : undefined;
   const filtersActive = Boolean(query || category || status || warning);
   const pageHref = (targetPage: number) => skuHref({ ...listState, page: targetPage });
-  const labelClass = "grid gap-1.5 text-xs font-semibold text-[#475467]";
-  const controlClass = "min-h-11 min-w-0 rounded-[7px] border border-[#d0d5dd] bg-white px-3 text-[13px] font-normal text-[#344054] outline-none focus:border-[#2563eb] focus:ring-3 focus:ring-blue-500/15";
+  const filterKey = [query, category, status, warning, pageSize].join("|");
 
   return (
     <>
@@ -146,15 +150,15 @@ export default async function SkusPage({
       {notice ? <div role="status" className="mb-4 rounded-lg border border-[#a7d9b6] bg-[#ecfdf3] px-4 py-3 text-[13px] font-semibold text-[#027a48]">{notice}</div> : null}
 
       <section className="overflow-hidden rounded-lg border border-[#e4e7ec] bg-white">
-        <form method="get" className="grid items-end gap-3 border-b border-[#e4e7ec] p-3.5 md:grid-cols-2 xl:grid-cols-4">
+        <form key={filterKey} method="get" className="grid items-end gap-3 border-b border-[#e4e7ec] p-3.5 md:grid-cols-2 xl:grid-cols-4">
           {sort !== "updatedAt" ? <input type="hidden" name="sort" value={sort} /> : null}
           {direction !== "desc" ? <input type="hidden" name="direction" value={direction} /> : null}
-          <label className={labelClass}><span>搜索</span><input name="q" defaultValue={query} placeholder="SKU 编码或名称" className={controlClass} /></label>
-          <label className={labelClass}><span>分类</span><input name="category" defaultValue={category} placeholder="例如：紧固件" className={controlClass} /></label>
-          <label className={labelClass}><span>启用状态</span><select name="status" defaultValue={status} className={controlClass}><option value="">全部状态</option><option value="enabled">启用</option>{canManage ? <option value="disabled">停用</option> : null}</select></label>
-          <label className={labelClass}><span>每页条数</span><select name="size" defaultValue={String(pageSize)} className={controlClass}><option value="20">20 条</option><option value="50">50 条</option><option value="100">100 条</option></select></label>
-          {canViewInventory ? <label className="flex min-h-11 items-center gap-2 rounded-[7px] border border-[#d0d5dd] px-3 text-[13px] font-semibold text-[#344054]"><input type="checkbox" name="warning" value="1" defaultChecked={warning} className="size-4 accent-[#2563eb]" />仅看库存预警</label> : null}
-          <div className={`flex gap-2 xl:justify-end ${canViewInventory ? "xl:col-span-3" : "xl:col-span-4"}`}><button type="submit" className="min-h-11 rounded-[7px] border border-[#d0d5dd] px-4 text-[13px] font-semibold text-[#344054]">筛选</button><Link href="/skus" className="inline-flex min-h-11 items-center justify-center rounded-[7px] px-4 text-[13px] font-semibold text-[#475467] hover:bg-[#f2f4f7]">清除</Link></div>
+          <Field><FieldLabel htmlFor="sku-filter-query" className="text-xs font-semibold text-[#475467]">搜索</FieldLabel><Input id="sku-filter-query" name="q" defaultValue={query} placeholder="SKU 编码或名称" /></Field>
+          <Field><FieldLabel htmlFor="sku-filter-category" className="text-xs font-semibold text-[#475467]">分类</FieldLabel><Input id="sku-filter-category" name="category" defaultValue={category} placeholder="例如：紧固件" /></Field>
+          <Field><FieldLabel htmlFor="sku-filter-status" className="text-xs font-semibold text-[#475467]">启用状态</FieldLabel><FormSelect id="sku-filter-status" name="status" defaultValue={status} options={[{ value: "", label: "全部状态" }, { value: "enabled", label: "启用" }, ...(canManage ? [{ value: "disabled", label: "停用" }] : [])]} /></Field>
+          <Field><FieldLabel htmlFor="sku-filter-size" className="text-xs font-semibold text-[#475467]">每页条数</FieldLabel><FormSelect id="sku-filter-size" name="size" defaultValue={String(pageSize)} options={[{ value: "20", label: "20 条" }, { value: "50", label: "50 条" }, { value: "100", label: "100 条" }]} /></Field>
+          {canViewInventory ? <Field orientation="horizontal" className="min-h-11 rounded-[7px] border border-[#d0d5dd] px-3"><Checkbox id="sku-filter-warning" name="warning" value="1" defaultChecked={warning} /><FieldLabel htmlFor="sku-filter-warning" className="text-[13px] font-semibold text-[#344054]">仅看库存预警</FieldLabel></Field> : null}
+          <div className={`flex gap-2 xl:justify-end ${canViewInventory ? "xl:col-span-3" : "xl:col-span-4"}`}><Button type="submit">筛选</Button><Button render={<Link href="/skus" />} nativeButton={false} variant="ghost">清除</Button></div>
         </form>
 
         {skuPage.items.length === 0 ? (

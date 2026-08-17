@@ -1,6 +1,5 @@
 import {
   IconPackageExport,
-  IconSearch,
   IconShieldCheck,
 } from "@tabler/icons-react";
 import type { Metadata } from "next";
@@ -8,6 +7,10 @@ import Link from "next/link";
 
 import { listPendingOutboundSalesOrders } from "@/application/outbound/outbound-service";
 import { OutboundConfirmTrigger } from "@/components/outbound-confirm-dialog";
+import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 import { prisma } from "@/lib/db";
 import { getPageActor } from "@/lib/server-authorization";
 
@@ -75,9 +78,6 @@ export default async function OutboundPage({
   const notice = first(parameters.notice);
   const reference = first(parameters.reference);
   const filtersActive = Boolean(query || from || to);
-  const controlClass =
-    "min-h-11 min-w-0 rounded-[7px] border border-[#d0d5dd] bg-white px-3 text-[13px] text-[#344054] outline-none focus:border-[#2563eb] focus:ring-3 focus:ring-blue-500/15";
-
   return (
     <div className="mx-auto max-w-[1320px]">
       <header className="mb-[18px] flex min-h-[58px] items-start justify-between gap-5 max-md:grid">
@@ -119,47 +119,21 @@ export default async function OutboundPage({
 
       <section className="overflow-hidden rounded-lg border border-[#e4e7ec] bg-white">
         <form
+          key={[query, from, to].join("|")}
           action="/warehouse/outbound"
           className="grid gap-3 border-b border-[#e4e7ec] p-3.5 lg:grid-cols-[minmax(260px,1fr)_180px_180px_auto] lg:items-end"
         >
-          <label className="grid gap-1.5 text-[13px] font-semibold text-[#475467]">
-            <span>销售单编号或客户名称</span>
-            <span className="relative">
-              <IconSearch
-                aria-hidden
-                className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-[#98a2b3]"
-                size={17}
-              />
-              <input
-                name="q"
-                defaultValue={query}
-                placeholder="搜索销售单或客户"
-                className={`${controlClass} w-full pl-9`}
-              />
-            </span>
-          </label>
-          <label className="grid gap-1.5 text-[13px] font-semibold text-[#475467]">
-            <span>确认开始日期</span>
-            <input name="from" type="date" defaultValue={from} className={controlClass} />
-          </label>
-          <label className="grid gap-1.5 text-[13px] font-semibold text-[#475467]">
-            <span>确认结束日期</span>
-            <input name="to" type="date" defaultValue={to} className={controlClass} />
-          </label>
+          <Field><FieldLabel htmlFor="outbound-query" className="text-[13px] font-semibold text-[#475467]">销售单编号或客户名称</FieldLabel><Input id="outbound-query" name="q" defaultValue={query} placeholder="搜索销售单或客户" /></Field>
+          <Field data-invalid={Boolean(dateError)}><FieldLabel htmlFor="outbound-from" className="text-[13px] font-semibold text-[#475467]">确认开始日期</FieldLabel><DatePicker id="outbound-from" name="from" value={from} invalid={Boolean(dateError)} /></Field>
+          <Field data-invalid={Boolean(dateError)}><FieldLabel htmlFor="outbound-to" className="text-[13px] font-semibold text-[#475467]">确认结束日期</FieldLabel><DatePicker id="outbound-to" name="to" value={to} invalid={Boolean(dateError)} /></Field>
           <div className="flex gap-2">
-            <button
-              type="submit"
-              className="inline-flex min-h-11 items-center justify-center rounded-[7px] bg-[#2563eb] px-4 text-sm font-semibold text-white hover:bg-[#1d4ed8]"
-            >
+            <Button type="submit" variant="primary">
               筛选
-            </button>
+            </Button>
             {filtersActive ? (
-              <Link
-                href="/warehouse/outbound"
-                className="inline-flex min-h-11 items-center justify-center rounded-[7px] border border-[#d0d5dd] px-4 text-sm font-semibold text-[#344054]"
-              >
+              <Button render={<Link href="/warehouse/outbound" />} nativeButton={false}>
                 清除
-              </Link>
+              </Button>
             ) : null}
           </div>
         </form>

@@ -11,6 +11,8 @@ import {
   type AccountActionState,
 } from "@/app/(workspace)/settings/accounts/actions";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
 import { useUnsavedChangesGuard } from "@/lib/use-unsaved-changes-guard";
 
 const roleOptions: Array<{ value: Role; label: string }> = [
@@ -77,12 +79,11 @@ function RoleFields({
             key={value}
             className="flex min-h-11 items-center gap-2 rounded-[7px] border border-[#d0d5dd] px-3 text-sm text-[#344054]"
           >
-            <input
-              type="checkbox"
+            <Checkbox
+              id={`account-role-${value}`}
               name="roles"
               value={value}
               defaultChecked={defaultRoles.includes(value)}
-              className="size-4 accent-[#2563eb]"
             />
             {label}
           </label>
@@ -140,12 +141,11 @@ export function AccountForm({
               errors={state.fieldErrors?.name}
               errorId="name-error"
             >
-              <input
+              <Input
                 name="name"
                 autoComplete="off"
                 aria-invalid={Boolean(state.fieldErrors?.name)}
                 aria-describedby={state.fieldErrors?.name ? "name-error" : undefined}
-                className="min-h-11 rounded-[7px] border border-[#d0d5dd] px-3 font-normal text-[#344054] outline-none focus:border-[#2563eb] focus:ring-3 focus:ring-blue-500/15"
               />
             </Field>
             <Field
@@ -153,13 +153,12 @@ export function AccountForm({
               errors={state.fieldErrors?.email}
               errorId="email-error"
             >
-              <input
+              <Input
                 name="email"
                 type="email"
                 autoComplete="off"
                 aria-invalid={Boolean(state.fieldErrors?.email)}
                 aria-describedby={state.fieldErrors?.email ? "email-error" : undefined}
-                className="min-h-11 rounded-[7px] border border-[#d0d5dd] px-3 font-normal text-[#344054] outline-none focus:border-[#2563eb] focus:ring-3 focus:ring-blue-500/15"
               />
             </Field>
             <Field
@@ -167,7 +166,7 @@ export function AccountForm({
               errors={state.fieldErrors?.password}
               errorId="password-error"
             >
-              <input
+              <Input
                 name="password"
                 type="password"
                 autoComplete="new-password"
@@ -175,7 +174,6 @@ export function AccountForm({
                 aria-describedby={
                   state.fieldErrors?.password ? "password-error" : undefined
                 }
-                className="min-h-11 rounded-[7px] border border-[#d0d5dd] px-3 font-normal text-[#344054] outline-none focus:border-[#2563eb] focus:ring-3 focus:ring-blue-500/15"
               />
             </Field>
           </>

@@ -8,6 +8,12 @@ import {
   type ReceivableListItem,
 } from "@/application/receivables/receivable-service";
 import { ExportButton } from "@/components/export-button";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { DatePicker } from "@/components/ui/date-picker";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { FormSelect } from "@/components/ui/form-select";
+import { Input } from "@/components/ui/input";
 import {
   chinaCalendarDayRange,
   parseCalendarDate,
@@ -170,8 +176,7 @@ export default async function ReceivablesPage({
       state.dueFrom ||
       state.dueTo,
   );
-  const controlClass = "min-h-11 min-w-0 rounded-[7px] border border-[#d0d5dd] bg-white px-3 text-[13px] font-normal text-[#344054] outline-none focus:border-[#2563eb] focus:ring-3 focus:ring-blue-500/15";
-  const labelClass = "grid gap-1.5 text-xs font-semibold text-[#475467]";
+  const filterKey = [state.query, state.status, state.responsibleSalesId, state.pageSize, state.dueFrom, state.dueTo, state.overdueOnly].join("|");
 
   return (
     <>
@@ -193,56 +198,20 @@ export default async function ReceivablesPage({
       ) : null}
 
       <section className="overflow-hidden rounded-lg border border-[#e4e7ec] bg-white">
-        <form method="get" className="grid items-end gap-3 border-b border-[#e4e7ec] p-3.5 md:grid-cols-2 xl:grid-cols-4">
+        <form key={filterKey} method="get" className="grid items-end gap-3 border-b border-[#e4e7ec] p-3.5 md:grid-cols-2 xl:grid-cols-4">
           {state.customerId ? <input type="hidden" name="customerId" value={state.customerId} /> : null}
           {state.outstandingOnly ? <input type="hidden" name="outstanding" value="1" /> : null}
           {state.paymentRecordedOn ? <input type="hidden" name="paymentRecordedOn" value={state.paymentRecordedOn} /> : null}
-          <label className={labelClass}>
-            <span>搜索</span>
-            <input name="q" defaultValue={state.query} placeholder="应收编号、销售单编号或客户" className={controlClass} />
-          </label>
-          <label className={labelClass}>
-            <span>结算状态</span>
-            <select name="status" defaultValue={state.status} className={controlClass}>
-              <option value="">全部状态</option>
-              <option value="PENDING">待收款</option>
-              <option value="PARTIAL">部分收款</option>
-              <option value="SETTLED">已结清</option>
-            </select>
-          </label>
-          <label className={labelClass}>
-            <span>客户负责人</span>
-            <select name="responsibleSalesId" defaultValue={state.responsibleSalesId} className={controlClass}>
-              <option value="">全部负责人</option>
-              {salesOptions.map((option) => (
-                <option key={option.id} value={option.id}>{option.name}{option.enabled ? "" : "（已停用）"}</option>
-              ))}
-            </select>
-          </label>
-          <label className={labelClass}>
-            <span>每页条数</span>
-            <select name="size" defaultValue={String(state.pageSize)} className={controlClass}>
-              <option value="20">20 条</option>
-              <option value="50">50 条</option>
-              <option value="100">100 条</option>
-            </select>
-          </label>
-          <label className={labelClass}>
-            <span>到期日开始</span>
-            <input type="date" name="from" defaultValue={state.dueFrom} aria-invalid={Boolean(dateError)} aria-describedby={dateError ? "receivable-date-error" : undefined} className={controlClass} />
-          </label>
-          <label className={labelClass}>
-            <span>到期日结束</span>
-            <input type="date" name="to" defaultValue={state.dueTo} aria-invalid={Boolean(dateError)} aria-describedby={dateError ? "receivable-date-error" : undefined} className={controlClass} />
-          </label>
-          <label className="flex min-h-11 items-center gap-2 rounded-[7px] border border-[#d0d5dd] px-3 text-[13px] font-semibold text-[#475467]">
-            <input type="checkbox" name="overdue" value="1" defaultChecked={state.overdueOnly} className="size-4 accent-[#2563eb]" />
-            仅看逾期
-          </label>
+          <Field><FieldLabel htmlFor="receivable-query" className="text-xs font-semibold text-[#475467]">搜索</FieldLabel><Input id="receivable-query" name="q" defaultValue={state.query} placeholder="应收编号、销售单编号或客户" /></Field>
+          <Field><FieldLabel htmlFor="receivable-status" className="text-xs font-semibold text-[#475467]">结算状态</FieldLabel><FormSelect id="receivable-status" name="status" defaultValue={state.status} options={[{ value: "", label: "全部状态" }, { value: "PENDING", label: "待收款" }, { value: "PARTIAL", label: "部分收款" }, { value: "SETTLED", label: "已结清" }]} /></Field>
+          <Field><FieldLabel htmlFor="receivable-responsible" className="text-xs font-semibold text-[#475467]">客户负责人</FieldLabel><FormSelect id="receivable-responsible" name="responsibleSalesId" defaultValue={state.responsibleSalesId} options={[{ value: "", label: "全部负责人" }, ...salesOptions.map((option) => ({ value: option.id, label: `${option.name}${option.enabled ? "" : "（已停用）"}` }))]} /></Field>
+          <Field><FieldLabel htmlFor="receivable-size" className="text-xs font-semibold text-[#475467]">每页条数</FieldLabel><FormSelect id="receivable-size" name="size" defaultValue={String(state.pageSize)} options={[{ value: "20", label: "20 条" }, { value: "50", label: "50 条" }, { value: "100", label: "100 条" }]} /></Field>
+          <Field data-invalid={Boolean(dateError)}><FieldLabel htmlFor="receivable-from" className="text-xs font-semibold text-[#475467]">到期日开始</FieldLabel><DatePicker id="receivable-from" name="from" value={state.dueFrom} invalid={Boolean(dateError)} describedBy={dateError ? "receivable-date-error" : undefined} /></Field>
+          <Field data-invalid={Boolean(dateError)}><FieldLabel htmlFor="receivable-to" className="text-xs font-semibold text-[#475467]">到期日结束</FieldLabel><DatePicker id="receivable-to" name="to" value={state.dueTo} invalid={Boolean(dateError)} describedBy={dateError ? "receivable-date-error" : undefined} /></Field>
+          <Field orientation="horizontal" className="min-h-11 rounded-[7px] border border-[#d0d5dd] px-3"><Checkbox id="receivable-overdue" name="overdue" value="1" defaultChecked={state.overdueOnly} /><FieldLabel htmlFor="receivable-overdue" className="text-[13px] font-semibold text-[#475467]">仅看逾期</FieldLabel></Field>
           <div className="flex items-start justify-between gap-3 md:col-span-2 xl:col-span-4">
             <ExportButton key={receivablesExportHref(state)} href={receivablesExportHref(state)} entityLabel="应收" disabled={Boolean(dateError) || receivablePage.total === 0} disabledMessage={dateError ?? "当前权限与筛选条件下没有可导出的应收。"} />
-            <div className="flex gap-2"><button type="submit" className="min-h-11 rounded-[7px] border border-[#d0d5dd] px-4 text-[13px] font-semibold text-[#344054]">筛选</button>
-            <Link href="/receivables" className="inline-flex min-h-11 items-center justify-center rounded-[7px] px-4 text-[13px] font-semibold text-[#475467] hover:bg-[#f2f4f7]">清除</Link></div>
+            <div className="flex gap-2"><Button type="submit">筛选</Button><Button render={<Link href="/receivables" />} nativeButton={false} variant="ghost">清除</Button></div>
           </div>
           {dateError ? <p id="receivable-date-error" role="alert" className="text-xs font-semibold text-[#c62828] md:col-span-2 xl:col-span-4">{dateError}</p> : null}
         </form>

@@ -6,6 +6,11 @@ import {
   listInventoryPage,
   type InventorySortField,
 } from "@/application/inventory/inventory-service";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { FormSelect } from "@/components/ui/form-select";
+import { Input } from "@/components/ui/input";
 import { prisma } from "@/lib/db";
 import { formatQuantity } from "@/lib/format-quantity";
 import { getPageActor } from "@/lib/server-authorization";
@@ -139,7 +144,7 @@ export default async function InventoryPage({
   const items = inventoryPage.items;
   const filtersActive = Boolean(query || category || statusValue || inventoryWarning);
   const pageHref = (targetPage: number) => inventoryHref({ ...listState, page: targetPage });
-  const controlClass = "min-h-11 min-w-0 rounded-[7px] border border-[#d0d5dd] bg-white px-3 text-[13px] font-normal text-[#344054] outline-none focus:border-[#2563eb] focus:ring-3 focus:ring-blue-500/15";
+  const filterKey = [query, category, statusValue, inventoryWarning, pageSize].join("|");
 
   return (
     <>
@@ -149,15 +154,15 @@ export default async function InventoryPage({
       </header>
 
       <section className="overflow-hidden rounded-lg border border-[#e4e7ec] bg-white">
-        <form method="get" className="grid items-end gap-3 border-b border-[#e4e7ec] p-3.5 md:grid-cols-2 xl:grid-cols-4">
+        <form key={filterKey} method="get" className="grid items-end gap-3 border-b border-[#e4e7ec] p-3.5 md:grid-cols-2 xl:grid-cols-4">
           {sort !== "skuCode" ? <input type="hidden" name="sort" value={sort} /> : null}
           {direction !== "asc" ? <input type="hidden" name="direction" value={direction} /> : null}
-          <label className="grid gap-1.5 text-xs font-semibold text-[#475467]"><span>搜索</span><input name="q" defaultValue={query} placeholder="SKU 编码或名称" className={controlClass} /></label>
-          <label className="grid gap-1.5 text-xs font-semibold text-[#475467]"><span>分类</span><input name="category" defaultValue={category} placeholder="例如：紧固件" className={controlClass} /></label>
-          <label className="grid gap-1.5 text-xs font-semibold text-[#475467]"><span>启用状态</span><select name="status" defaultValue={statusValue} className={controlClass}><option value="">全部状态</option><option value="enabled">启用</option><option value="disabled">停用</option></select></label>
-          <label className="flex min-h-11 items-center gap-2 rounded-[7px] border border-[#d0d5dd] px-3 text-[13px] font-semibold text-[#344054]"><input type="checkbox" name="warning" value="1" defaultChecked={inventoryWarning} className="size-4 accent-[#2563eb]" />仅看库存预警</label>
-          <label className="grid gap-1.5 text-xs font-semibold text-[#475467]"><span>每页条数</span><select name="size" defaultValue={String(pageSize)} className={controlClass}><option value="20">20 条</option><option value="50">50 条</option><option value="100">100 条</option></select></label>
-          <div className="flex gap-2 md:col-span-2 xl:col-span-3 xl:justify-end"><button type="submit" className="min-h-11 rounded-[7px] border border-[#d0d5dd] px-4 text-[13px] font-semibold text-[#344054]">筛选</button><Link href="/inventory" className="inline-flex min-h-11 items-center justify-center rounded-[7px] px-4 text-[13px] font-semibold text-[#475467] hover:bg-[#f2f4f7]">清除</Link></div>
+          <Field><FieldLabel htmlFor="inventory-query" className="text-xs font-semibold text-[#475467]">搜索</FieldLabel><Input id="inventory-query" name="q" defaultValue={query} placeholder="SKU 编码或名称" /></Field>
+          <Field><FieldLabel htmlFor="inventory-category" className="text-xs font-semibold text-[#475467]">分类</FieldLabel><Input id="inventory-category" name="category" defaultValue={category} placeholder="例如：紧固件" /></Field>
+          <Field><FieldLabel htmlFor="inventory-status" className="text-xs font-semibold text-[#475467]">启用状态</FieldLabel><FormSelect id="inventory-status" name="status" defaultValue={statusValue} options={[{ value: "", label: "全部状态" }, { value: "enabled", label: "启用" }, { value: "disabled", label: "停用" }]} /></Field>
+          <Field orientation="horizontal" className="min-h-11 rounded-[7px] border border-[#d0d5dd] px-3"><Checkbox id="inventory-warning" name="warning" value="1" defaultChecked={inventoryWarning} /><FieldLabel htmlFor="inventory-warning" className="text-[13px] font-semibold text-[#344054]">仅看库存预警</FieldLabel></Field>
+          <Field><FieldLabel htmlFor="inventory-size" className="text-xs font-semibold text-[#475467]">每页条数</FieldLabel><FormSelect id="inventory-size" name="size" defaultValue={String(pageSize)} options={[{ value: "20", label: "20 条" }, { value: "50", label: "50 条" }, { value: "100", label: "100 条" }]} /></Field>
+          <div className="flex gap-2 md:col-span-2 xl:col-span-3 xl:justify-end"><Button type="submit">筛选</Button><Button render={<Link href="/inventory" />} nativeButton={false} variant="ghost">清除</Button></div>
         </form>
 
         {items.length === 0 ? (

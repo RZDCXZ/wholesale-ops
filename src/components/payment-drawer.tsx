@@ -19,6 +19,10 @@ import {
   type PaymentActionState,
 } from "@/app/(workspace)/receivables/actions";
 import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
+import { FormSelect } from "@/components/ui/form-select";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { keepFocusInDialog } from "@/lib/dialog-focus";
 import { formatMoney } from "@/lib/format-money";
 import {
@@ -137,81 +141,69 @@ function PaymentDrawer({
             <div className="grid gap-4">
               <label className="grid gap-1.5 text-[13px] font-semibold text-[#475467]">
                 <span>收款日期 <b className="text-[#c62828]">*</b></span>
-                <input
-                  type="date"
+                <DatePicker
                   name="paymentDate"
-                  required
-                  defaultValue={today}
-                  aria-invalid={Boolean(state.fieldErrors?.paymentDate)}
-                  aria-describedby={state.fieldErrors?.paymentDate ? "payment-date-error" : undefined}
-                  className="min-h-11 rounded-[7px] border border-[#d0d5dd] px-3 text-sm font-normal text-[#344054] outline-none focus:border-[#2563eb] focus:ring-3 focus:ring-blue-500/15"
+                  value={today}
+                  invalid={Boolean(state.fieldErrors?.paymentDate)}
+                  describedBy={state.fieldErrors?.paymentDate ? "payment-date-error" : undefined}
                 />
                 <FieldError id="payment-date-error" messages={state.fieldErrors?.paymentDate} />
               </label>
 
               <label className="grid gap-1.5 text-[13px] font-semibold text-[#475467]">
                 <span>金额 <b className="text-[#c62828]">*</b></span>
-                <div className="flex overflow-hidden rounded-[7px] border border-[#d0d5dd] focus-within:border-[#2563eb] focus-within:ring-3 focus-within:ring-blue-500/15">
-                  <span className="grid min-h-11 place-items-center border-r border-[#e4e7ec] bg-[#f8fafc] px-3 font-normal">¥</span>
-                  <input
+                <div className="flex gap-2 max-sm:flex-col">
+                  <Input
                     name="amountFen"
                     inputMode="decimal"
                     required
                     value={amount}
-                    placeholder="0.00"
+                    placeholder="¥0.00"
                     aria-invalid={Boolean(state.fieldErrors?.amountFen)}
                     aria-describedby={state.fieldErrors?.amountFen ? "payment-amount-error" : undefined}
                     onChange={(event) => setAmount(event.target.value)}
-                    className="min-h-11 min-w-0 flex-1 px-3 text-sm font-normal tabular-nums outline-none"
+                    className="min-w-0 flex-1 tabular-nums"
                   />
-                  <button
-                    type="button"
-                    className="min-h-11 border-l border-[#e4e7ec] bg-white px-3 text-xs font-semibold whitespace-nowrap text-[#1d4ed8] hover:bg-[#eff6ff]"
+                  <Button
+                    variant="ghost"
+                    className="shrink-0 text-xs text-[#1d4ed8]"
                     onClick={() => setAmount((receivable.remainingAmountFen / 100).toFixed(2))}
                   >
                     填入全部未收金额
-                  </button>
+                  </Button>
                 </div>
                 <FieldError id="payment-amount-error" messages={state.fieldErrors?.amountFen} />
               </label>
 
               <label className="grid gap-1.5 text-[13px] font-semibold text-[#475467]">
                 <span>收款方式 <b className="text-[#c62828]">*</b></span>
-                <select
+                <FormSelect
                   name="method"
                   defaultValue="BANK_TRANSFER"
                   aria-invalid={Boolean(state.fieldErrors?.method)}
                   aria-describedby={state.fieldErrors?.method ? "payment-method-error" : undefined}
-                  className="min-h-11 rounded-[7px] border border-[#d0d5dd] bg-white px-3 text-sm font-normal text-[#344054] outline-none focus:border-[#2563eb] focus:ring-3 focus:ring-blue-500/15"
-                >
-                  {paymentMethodValues.map((method) => (
-                    <option key={method} value={method}>
-                      {paymentMethodLabels[method]}
-                    </option>
-                  ))}
-                </select>
+                  options={paymentMethodValues.map((method) => ({ value: method, label: paymentMethodLabels[method] }))}
+                />
                 <FieldError id="payment-method-error" messages={state.fieldErrors?.method} />
               </label>
 
               <label className="grid gap-1.5 text-[13px] font-semibold text-[#475467]">
                 <span>参考号 <em className="font-normal not-italic text-[#98a2b3]">（可选）</em></span>
-                <input
+                <Input
                   name="referenceNumber"
                   maxLength={160}
                   placeholder="例如银行流水号"
-                  className="min-h-11 rounded-[7px] border border-[#d0d5dd] px-3 text-sm font-normal text-[#344054] outline-none focus:border-[#2563eb] focus:ring-3 focus:ring-blue-500/15"
                 />
                 <FieldError id="payment-reference-error" messages={state.fieldErrors?.referenceNumber} />
               </label>
 
               <label className="grid gap-1.5 text-[13px] font-semibold text-[#475467]">
                 <span>备注 <em className="font-normal not-italic text-[#98a2b3]">（可选）</em></span>
-                <textarea
+                <Textarea
                   name="note"
                   rows={3}
                   maxLength={1_000}
                   placeholder="补充本次收款的经营说明"
-                  className="rounded-[7px] border border-[#d0d5dd] px-3 py-2.5 text-sm font-normal text-[#344054] outline-none focus:border-[#2563eb] focus:ring-3 focus:ring-blue-500/15"
                 />
                 <FieldError id="payment-note-error" messages={state.fieldErrors?.note} />
               </label>

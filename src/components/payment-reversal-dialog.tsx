@@ -19,6 +19,7 @@ import {
 } from "@/app/(workspace)/receivables/actions";
 import type { PaymentRecord } from "@/application/receivables/receivable-service";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
 import { keepFocusInDialog } from "@/lib/dialog-focus";
 import { formatMoney } from "@/lib/format-money";
 import { paymentMethodLabels } from "@/lib/receivable-display";
@@ -163,7 +164,7 @@ function PaymentReversalDialog({
               <span>
                 撤销原因 <span className="text-[#c62828]">*</span>
               </span>
-              <textarea
+              <Textarea
                 ref={reason}
                 name="reason"
                 required
@@ -176,7 +177,7 @@ function PaymentReversalDialog({
                   state.fieldErrors?.reason ? "payment-reversal-reason-error" : undefined
                 }
                 placeholder="请说明为什么撤销这笔收款"
-                className="min-h-24 resize-y rounded-[7px] border border-[#d0d5dd] px-3 py-2.5 text-sm text-[#1d2939] outline-none focus:border-[#2563eb] focus:ring-2 focus:ring-[#bfdbfe] aria-invalid:border-[#d92d20]"
+                className="resize-y"
               />
               {state.fieldErrors?.reason?.[0] ? (
                 <small id="payment-reversal-reason-error" className="text-[#c62828]">

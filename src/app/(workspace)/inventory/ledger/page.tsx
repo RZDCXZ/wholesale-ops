@@ -9,6 +9,11 @@ import {
   type InventoryMovementSortField,
 } from "@/application/inventory/inventory-service";
 import { ExportButton } from "@/components/export-button";
+import { Button } from "@/components/ui/button";
+import { DatePicker } from "@/components/ui/date-picker";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { FormSelect } from "@/components/ui/form-select";
+import { Input } from "@/components/ui/input";
 import { prisma } from "@/lib/db";
 import {
   formatQuantity,
@@ -185,7 +190,7 @@ export default async function InventoryLedgerPage({
   const skuId = selectedSku?.skuId ?? "";
   const filtersActive = Boolean(skuIdValue || movementType || from || to || reference || actorName || importId);
   const pageHref = (targetPage: number) => ledgerHref({ ...listState, page: targetPage });
-  const controlClass = "min-h-11 min-w-0 rounded-[7px] border border-[#d0d5dd] bg-white px-3 text-[13px] font-normal text-[#344054] outline-none focus:border-[#2563eb] focus:ring-3 focus:ring-blue-500/15";
+  const filterKey = [skuId, movementType ?? "", from, to, reference, actorName, pageSize].join("|");
 
   return (
     <>
@@ -197,19 +202,19 @@ export default async function InventoryLedgerPage({
       {selectedSku ? <section className="mb-4 grid gap-3 rounded-lg border border-[#e4e7ec] bg-white p-4 sm:grid-cols-3"><div className="rounded-lg bg-[#f7f9fb] p-3"><span className="text-xs text-[#667085]">SKU</span><strong className="mt-1 block font-mono text-sm">{selectedSku.skuCode}</strong></div><div className="rounded-lg bg-[#f7f9fb] p-3"><span className="text-xs text-[#667085]">名称与单位</span><strong className="mt-1 block text-sm">{selectedSku.name} · {selectedSku.inventoryUnit}</strong></div><div className="rounded-lg bg-[#f7f9fb] p-3"><span className="text-xs text-[#667085]">当前三数</span><strong className="mt-1 block text-sm">现存 {formatQuantity(selectedSku.onHandQuantity)} · 预占 {formatQuantity(selectedSku.reservedQuantity)} · 可用 {formatQuantity(selectedSku.availableQuantity)}</strong></div></section> : null}
 
       <section className="overflow-hidden rounded-lg border border-[#e4e7ec] bg-white">
-        <form method="get" className="grid items-end gap-3 border-b border-[#e4e7ec] p-3.5 md:grid-cols-2 xl:grid-cols-6">
+        <form key={filterKey} method="get" className="grid items-end gap-3 border-b border-[#e4e7ec] p-3.5 md:grid-cols-2 xl:grid-cols-6">
           {importId ? <input type="hidden" name="importId" value={importId} /> : null}
           {sort !== "occurredAt" ? <input type="hidden" name="sort" value={sort} /> : null}
           {direction !== "desc" ? <input type="hidden" name="direction" value={direction} /> : null}
-          <label className="grid gap-1.5 text-xs font-semibold text-[#475467]"><span>SKU</span><select name="skuId" defaultValue={skuId} className={controlClass}><option value="">全部 SKU</option>{skus.map((sku) => <option key={sku.skuId} value={sku.skuId}>{sku.skuCode} · {sku.name}</option>)}</select></label>
-          <label className="grid gap-1.5 text-xs font-semibold text-[#475467]"><span>动作类型</span><select name="type" defaultValue={movementType ?? ""} className={controlClass}><option value="">全部类型</option>{Object.entries(movementLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select></label>
-          <label className="grid gap-1.5 text-xs font-semibold text-[#475467]"><span>开始日期</span><input type="date" name="from" defaultValue={from} className={controlClass} /></label>
-          <label className="grid gap-1.5 text-xs font-semibold text-[#475467]"><span>结束日期</span><input type="date" name="to" defaultValue={to} className={controlClass} /></label>
-          <label className="grid gap-1.5 text-xs font-semibold text-[#475467]"><span>关联编号</span><input name="reference" defaultValue={reference} placeholder="文件名或销售单编号" className={controlClass} /></label>
-          <label className="grid gap-1.5 text-xs font-semibold text-[#475467]"><span>操作者</span><input name="actor" defaultValue={actorName} placeholder="姓名" className={controlClass} /></label>
-          <label className="grid gap-1.5 text-xs font-semibold text-[#475467]"><span>每页条数</span><select name="size" defaultValue={String(pageSize)} className={controlClass}><option value="20">20 条</option><option value="50">50 条</option><option value="100">100 条</option></select></label>
+          <Field><FieldLabel htmlFor="ledger-sku" className="text-xs font-semibold text-[#475467]">SKU</FieldLabel><FormSelect id="ledger-sku" name="skuId" defaultValue={skuId} options={[{ value: "", label: "全部 SKU" }, ...skus.map((sku) => ({ value: sku.skuId, label: `${sku.skuCode} · ${sku.name}` }))]} /></Field>
+          <Field><FieldLabel htmlFor="ledger-type" className="text-xs font-semibold text-[#475467]">动作类型</FieldLabel><FormSelect id="ledger-type" name="type" defaultValue={movementType ?? ""} options={[{ value: "", label: "全部类型" }, ...Object.entries(movementLabels).map(([value, label]) => ({ value, label }))]} /></Field>
+          <Field data-invalid={Boolean(dateError)}><FieldLabel htmlFor="ledger-from" className="text-xs font-semibold text-[#475467]">开始日期</FieldLabel><DatePicker id="ledger-from" name="from" value={from} invalid={Boolean(dateError)} /></Field>
+          <Field data-invalid={Boolean(dateError)}><FieldLabel htmlFor="ledger-to" className="text-xs font-semibold text-[#475467]">结束日期</FieldLabel><DatePicker id="ledger-to" name="to" value={to} invalid={Boolean(dateError)} /></Field>
+          <Field><FieldLabel htmlFor="ledger-reference" className="text-xs font-semibold text-[#475467]">关联编号</FieldLabel><Input id="ledger-reference" name="reference" defaultValue={reference} placeholder="文件名或销售单编号" /></Field>
+          <Field><FieldLabel htmlFor="ledger-actor" className="text-xs font-semibold text-[#475467]">操作者</FieldLabel><Input id="ledger-actor" name="actor" defaultValue={actorName} placeholder="姓名" /></Field>
+          <Field><FieldLabel htmlFor="ledger-size" className="text-xs font-semibold text-[#475467]">每页条数</FieldLabel><FormSelect id="ledger-size" name="size" defaultValue={String(pageSize)} options={[{ value: "20", label: "20 条" }, { value: "50", label: "50 条" }, { value: "100", label: "100 条" }]} /></Field>
           {dateError ? <p role="alert" className="col-span-full rounded-[7px] border border-[#edb1b1] bg-[#fff0f0] px-3 py-2 text-[13px] text-[#c62828]">{dateError}</p> : null}
-          <div className="flex gap-2 md:col-span-2 xl:col-span-5 xl:justify-end"><button type="submit" className="min-h-11 rounded-[7px] border border-[#d0d5dd] px-4 text-[13px] font-semibold text-[#344054]">筛选</button><Link href="/inventory/ledger" className="inline-flex min-h-11 items-center justify-center rounded-[7px] px-4 text-[13px] font-semibold text-[#475467] hover:bg-[#f2f4f7]">清除</Link></div>
+          <div className="flex gap-2 md:col-span-2 xl:col-span-5 xl:justify-end"><Button type="submit">筛选</Button><Button render={<Link href="/inventory/ledger" />} nativeButton={false} variant="ghost">清除</Button></div>
         </form>
 
         {movements.length === 0 ? (
